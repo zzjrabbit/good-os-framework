@@ -9,15 +9,9 @@
 cargo-features = ["edition"]
 
 [package]
-name = "pci"
+name = "pci-tmp"
 version = "0.0.1"
 edition = "2018"
-authors = ["Corey Richardson <corey@octayn.net>"]
-description = "Generic PCI scanning, configuration-space access, and header parsing"
-documentation = "https://doc.robigalia.org/pci"
-repository = "https://gitlab.com/robigalia/pci"
-readme = "README.md"
-license = "MIT/Apache-2.0"
 #build = "build.rs"
 
 [dependencies]
