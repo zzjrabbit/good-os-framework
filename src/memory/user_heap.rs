@@ -123,7 +123,7 @@ impl ProcessHeap {
             }
             _ => {}
         }
-        if self.usable_size < layout.size() {
+        if self.usable_size/3 < layout.size() {
             let size = layout.size() * 2;
             let page_cnt = (size + 4095) / 4096;
             self.allocator.add(HEAP_START as usize + self.size, size);
