@@ -111,6 +111,7 @@ dependencies = [
  "log",
  "noto-sans-mono-bitmap",
  "object",
+ "os-terminal",
  "pc-keyboard",
  "pci-for-framework",
  "spin",
@@ -195,6 +196,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f203fa8daa7bb185f760ae12bd8e097f63d17041dcdcaf675ac54cdf863170e"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "os-terminal"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3c9ba95bce92a4bc3d508a696ee8a515cf49040f08b6ec1f8a085543f0c81e9"
+dependencies = [
+ "bitflags 2.6.0",
+ "noto-sans-mono-bitmap",
+ "spin",
+ "vte",
 ]
 
 [[package]]

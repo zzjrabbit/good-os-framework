@@ -5,6 +5,7 @@ edition = "2021"
 repository = "https://github.com/zzjrabbit/good-os-framework"
 description = "A simple operating system framework for framekernel written in Rust"
 license = "MIT/Apache-2.0"
+keywords = ["os", "rust", "framework", "framekernel" ,"no_std"]
 
 [dependencies]
 limine = "0.2.0"
@@ -20,6 +21,7 @@ good_memory_allocator = "0.1.7"
 vte = "0.13.0"
 colorz = "1.1.2"
 xhci = "0.9.2"
+os-terminal ="0.1.1"
 
 [dependencies.pci]
 package = "pci-for-framework"

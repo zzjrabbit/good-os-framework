@@ -1,7 +1,7 @@
 use core::slice::from_raw_parts_mut;
 use limine::request::FramebufferRequest;
 
-use crate::terminal::DrawTarget;
+use os_terminal::DrawTarget;
 
 #[used]
 #[link_section = ".requests"]

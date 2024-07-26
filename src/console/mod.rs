@@ -3,12 +3,12 @@ use spin::{Lazy, Mutex};
 use x86_64::instructions::interrupts;
 
 use crate::drivers::display::Display;
-use crate::terminal::Console;
+use os_terminal::Terminal;
 
 mod log;
 
-pub static CONSOLE: Lazy<Mutex<Console<Display>>> =
-    Lazy::new(|| Mutex::new(Console::new(Display::new())));
+pub static CONSOLE: Lazy<Mutex<Terminal<Display>>> =
+    Lazy::new(|| Mutex::new(Terminal::new(Display::new())));
 
 pub fn init() {
     log::init();
