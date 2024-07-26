@@ -228,11 +228,11 @@ impl GeneralPageTable {
     }
 }
 
-pub fn write_for_syscall(addr: VirtAddr, buf: &[u8]) {
-    let reffer: *mut u8 = addr.as_mut_ptr();
+pub fn write_for_syscall<T: Clone>(addr: VirtAddr, buf: &[T]) {
+    let reffer: *mut T = addr.as_mut_ptr();
     for (idx, byte) in buf.iter().enumerate() {
         unsafe {
-            reffer.add(idx).write(*byte);
+            reffer.add(idx).write(byte.clone());
         }
     }
 }
