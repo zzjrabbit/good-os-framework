@@ -127,12 +127,7 @@ impl ProcessHeap {
                 | PageTableFlags::WRITABLE
                 | PageTableFlags::USER_ACCESSIBLE;
             unsafe {
-                self.process
-                    .as_ref()
-                    .unwrap()
-                    .upgrade()
-                    .unwrap()
-                    .write()
+                ref_to_mut(&*self.process.as_ref().unwrap().upgrade().unwrap().read())
                     .page_table
                     .map_to(page, frame, flags, &mut *FRAME_ALLOCATOR.lock())
                     .unwrap()
@@ -163,8 +158,8 @@ impl ProcessHeap {
         if let Some(ptr) = self.allocator.alloc(layout) {
             self.usable_size -= layout.size();
             Some(ptr as u64)
-        }else {
-            self.sbrk(layout.size()*2);
+        } else {
+            self.sbrk(layout.size() * 2);
             let ptr = self.allocator.alloc(layout).unwrap();
             self.usable_size -= layout.size();
             Some(ptr as u64)
