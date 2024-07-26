@@ -116,6 +116,43 @@ impl ProcessHeap {
         }
     }
 
+    fn sbrk(&mut self, size: usize) {
+        let page_cnt = (size + 4095) / 4096;
+        self.allocator.add(HEAP_START as usize + self.size, size);
+        log::info!("need {}", size);
+        for _ in 0..page_cnt {
+            let frame = FRAME_ALLOCATOR.lock().allocate_frame().unwrap();
+            let page = Page::containing_address(VirtAddr::new(HEAP_START + self.size as u64));
+            let flags = PageTableFlags::PRESENT
+                | PageTableFlags::WRITABLE
+                | PageTableFlags::USER_ACCESSIBLE;
+            unsafe {
+                self.process
+                    .as_ref()
+                    .unwrap()
+                    .upgrade()
+                    .unwrap()
+                    .write()
+                    .page_table
+                    .map_to(page, frame, flags, &mut *FRAME_ALLOCATOR.lock())
+                    .unwrap()
+                    .flush();
+            }
+
+            /*KERNEL_PAGE_TABLE
+            .try_get()
+            .unwrap()
+            .lock()
+            .unmap(page)
+            .unwrap()
+            .1
+            .flush();*/
+
+            self.size += 4096;
+            self.usable_size += 4096;
+        }
+    }
+
     pub fn allocate(&mut self, layout: Layout) -> Option<u64> {
         match self.heap_type {
             HeapType::Kernel => {
@@ -123,47 +160,15 @@ impl ProcessHeap {
             }
             _ => {}
         }
-        if self.usable_size/2 < layout.size() {
-            let size = layout.size() * 2;
-            let page_cnt = (size + 4095) / 4096;
-            self.allocator.add(HEAP_START as usize + self.size, size);
-            log::info!("need {}", size);
-            for _ in 0..page_cnt {
-                let frame = FRAME_ALLOCATOR.lock().allocate_frame().unwrap();
-                let page = Page::containing_address(VirtAddr::new(HEAP_START + self.size as u64));
-                let flags = PageTableFlags::PRESENT
-                    | PageTableFlags::WRITABLE
-                    | PageTableFlags::USER_ACCESSIBLE;
-                unsafe {
-                    self.process
-                        .as_ref()
-                        .unwrap()
-                        .upgrade()
-                        .unwrap()
-                        .write()
-                        .page_table
-                        .map_to(page, frame, flags, &mut *FRAME_ALLOCATOR.lock())
-                        .unwrap()
-                        .flush();
-                }
-
-                /*KERNEL_PAGE_TABLE
-                .try_get()
-                .unwrap()
-                .lock()
-                .unmap(page)
-                .unwrap()
-                .1
-                .flush();*/
-
-                self.size += 4096;
-                self.usable_size += 4096;
-            }
+        if let Some(ptr) = self.allocator.alloc(layout) {
+            self.usable_size -= layout.size();
+            Some(ptr as u64)
+        }else {
+            self.sbrk(layout.size()*2);
+            let ptr = self.allocator.alloc(layout).unwrap();
+            self.usable_size -= layout.size();
+            Some(ptr as u64)
         }
-
-        let ptr = self.allocator.alloc(layout).unwrap();
-        self.usable_size -= layout.size();
-        Some(ptr as u64)
     }
 
     pub fn deallocate(&mut self, ptr: u64, layout: Layout) {
