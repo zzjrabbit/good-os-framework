@@ -13,7 +13,6 @@ pub mod console;
 pub mod drivers;
 pub mod memory;
 pub mod task;
-pub mod terminal;
 pub mod user;
 
 static START_SCHEDULE: AtomicBool = AtomicBool::new(false);
