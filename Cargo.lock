@@ -200,9 +200,9 @@ dependencies = [
 
 [[package]]
 name = "os-terminal"
-version = "0.2.0"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53f72e6689d7049158e175dbdf0a20cf702ed27a78ff12a3ba090745f027783d"
+checksum = "a4c0874e1e8110d73e813e0afbebf050e403e7c9c54d652860a33ca50df9f068"
 dependencies = [
  "bitflags 2.6.0",
  "noto-sans-mono-bitmap",

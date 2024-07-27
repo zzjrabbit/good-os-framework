@@ -122,8 +122,8 @@ impl ProcessHeap {
         let mut frame_allocator = FRAME_ALLOCATOR.lock();
         let process = self.process.as_ref().unwrap().upgrade().unwrap();
         let process = process.read();
+
         let process = ref_to_mut(&*process);
-        log::info!("need {}", size);
         for _ in 0..page_cnt {
             let frame = frame_allocator.allocate_frame().unwrap();
             let page = Page::containing_address(VirtAddr::new(HEAP_START + self.size as u64));
@@ -136,7 +136,7 @@ impl ProcessHeap {
                     .unwrap()
                     .flush();
             }
-            log::info!("need {}", size);
+
 
             /*KERNEL_PAGE_TABLE
             .try_get()
