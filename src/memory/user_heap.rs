@@ -132,7 +132,7 @@ impl ProcessHeap {
                 | PageTableFlags::USER_ACCESSIBLE;
             unsafe {
                     process.page_table
-                    .map_to(page, frame, flags, &mut *FRAME_ALLOCATOR.lock())
+                    .map_to(page, frame, flags, &mut *frame_allocator)
                     .unwrap()
                     .flush();
             }
