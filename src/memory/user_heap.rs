@@ -120,6 +120,9 @@ impl ProcessHeap {
         let page_cnt = (size + 4095) / 4096;
         self.allocator.add(HEAP_START as usize + self.size, size);
         let mut frame_allocator = FRAME_ALLOCATOR.lock();
+        let process = self.process.as_ref().unwrap().upgrade().unwrap();
+        let process = process.read();
+        let process = ref_to_mut(&*process);
         log::info!("need {}", size);
         for _ in 0..page_cnt {
             let frame = frame_allocator.allocate_frame().unwrap();
@@ -128,8 +131,7 @@ impl ProcessHeap {
                 | PageTableFlags::WRITABLE
                 | PageTableFlags::USER_ACCESSIBLE;
             unsafe {
-                ref_to_mut(&*self.process.as_ref().unwrap().upgrade().unwrap().read())
-                    .page_table
+                    process.page_table
                     .map_to(page, frame, flags, &mut *FRAME_ALLOCATOR.lock())
                     .unwrap()
                     .flush();
