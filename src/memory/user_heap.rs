@@ -133,6 +133,7 @@ impl ProcessHeap {
                     .unwrap()
                     .flush();
             }
+            log::info!("need {}", size);
 
             /*KERNEL_PAGE_TABLE
             .try_get()
