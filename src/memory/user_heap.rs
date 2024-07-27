@@ -119,9 +119,10 @@ impl ProcessHeap {
     fn sbrk(&mut self, size: usize) {
         let page_cnt = (size + 4095) / 4096;
         self.allocator.add(HEAP_START as usize + self.size, size);
+        let mut frame_allocator = FRAME_ALLOCATOR.lock();
         log::info!("need {}", size);
         for _ in 0..page_cnt {
-            let frame = FRAME_ALLOCATOR.lock().allocate_frame().unwrap();
+            let frame = frame_allocator.allocate_frame().unwrap();
             let page = Page::containing_address(VirtAddr::new(HEAP_START + self.size as u64));
             let flags = PageTableFlags::PRESENT
                 | PageTableFlags::WRITABLE
