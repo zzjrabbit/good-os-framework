@@ -9,6 +9,7 @@ use super::process::WeakSharedProcess;
 use super::scheduler::add_thread;
 use super::scheduler::KERNEL_PROCESS;
 use super::stack::{KernelStack, UserStack};
+use crate::arch::apic::get_lapic_id;
 use crate::arch::gdt::Selectors;
 use crate::memory::KERNEL_PAGE_TABLE;
 
@@ -37,6 +38,7 @@ pub enum ThreadState {
 #[allow(dead_code)]
 pub struct Thread {
     pub id: ThreadId,
+    pub cpu_id: usize,
     pub state: ThreadState,
     pub kernel_stack: KernelStack,
     pub context: Context,
@@ -47,6 +49,7 @@ impl Thread {
     pub fn new(process: WeakSharedProcess) -> Self {
         let thread = Thread {
             id: ThreadId::new(),
+            cpu_id: get_lapic_id() as usize,
             state: ThreadState::Ready,
             context: Context::default(),
             kernel_stack: KernelStack::new(),

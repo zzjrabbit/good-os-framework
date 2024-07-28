@@ -10,6 +10,7 @@ use super::context::Context;
 use super::process::SharedProcess;
 use super::thread::{SharedThread, ThreadState, WeakSharedThread};
 use super::{Process, Thread};
+use crate::arch::apic::get_lapic_id;
 use crate::arch::smp::CPUS;
 
 pub static SCHEDULER_INIT: AtomicBool = AtomicBool::new(false);
@@ -40,6 +41,36 @@ pub fn add_process(process: SharedProcess) {
 #[inline]
 pub fn add_thread(thread: WeakSharedThread) {
     interrupts::without_interrupts(|| {
+        // 这里会卡死，不知道为什么，所以先注释掉
+        // let cpu_num = CPUS.lock().cpu_num();
+        let cpu_num = 2;
+
+        let mut min_loads_cpu_id: usize = thread.upgrade().unwrap().read().cpu_id;
+        let mut min_loads = THREADS.lock().len();
+
+        for cpu_id in 0..cpu_num {
+            let mut tmp_cpu_loads = 0;
+            if THREADS.lock().len() > 0 {
+                for thread in THREADS.lock().iter() {
+                    if thread.upgrade().unwrap().read().cpu_id != cpu_id {
+                        continue;
+                    }
+                    tmp_cpu_loads += 1;
+                }
+            } else {
+                break;
+            }
+
+            if min_loads - tmp_cpu_loads > 0 {
+                min_loads_cpu_id = cpu_id;
+                min_loads = tmp_cpu_loads;
+            }
+        }
+
+        if min_loads_cpu_id != thread.upgrade().unwrap().read().cpu_id {
+            thread.upgrade().unwrap().write().cpu_id = min_loads_cpu_id;
+        }
+
         THREADS.lock().push(thread);
     });
 }
@@ -63,7 +94,6 @@ impl Scheduler {
             let thread = thread0.upgrade().unwrap();
             threads.push(thread0);
             if thread.read().state == ThreadState::Ready {
-                thread.write().state = ThreadState::Running;
                 return thread.clone();
             }
             idx += 1;
@@ -82,7 +112,15 @@ impl Scheduler {
             self.current_thread.clone()
         };
 
-        self.current_thread = self.get_next();
+        let next_thread = self.get_next();
+
+        let current_cpu_id = get_lapic_id();
+        if (current_cpu_id as usize) != next_thread.read().cpu_id {
+            return context;
+        }
+
+        next_thread.write().state = ThreadState::Running;
+        self.current_thread = next_thread;
 
         last_thread.write().state = ThreadState::Ready;
 

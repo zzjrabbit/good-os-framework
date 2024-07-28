@@ -131,12 +131,12 @@ impl ProcessHeap {
                 | PageTableFlags::WRITABLE
                 | PageTableFlags::USER_ACCESSIBLE;
             unsafe {
-                    process.page_table
+                process
+                    .page_table
                     .map_to(page, frame, flags, &mut *frame_allocator)
                     .unwrap()
                     .flush();
             }
-
 
             /*KERNEL_PAGE_TABLE
             .try_get()
