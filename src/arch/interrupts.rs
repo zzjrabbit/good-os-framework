@@ -1,7 +1,10 @@
+use alloc::collections::btree_map::BTreeMap;
 use alloc::format;
 use spin::Lazy;
+use spin::Mutex;
 use x86_64::instructions::port::PortReadOnly;
 use x86_64::registers::control::Cr2;
+use x86_64::set_general_handler;
 use x86_64::structures::idt::InterruptDescriptorTable;
 use x86_64::structures::idt::InterruptStackFrame;
 use x86_64::structures::idt::PageFaultErrorCode;
@@ -26,6 +29,8 @@ pub enum InterruptIndex {
 pub static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
     let mut idt = InterruptDescriptorTable::new();
 
+    set_general_handler!(&mut idt, do_irq, 0..255);
+
     idt.breakpoint.set_handler_fn(breakpoint);
     idt.segment_not_present.set_handler_fn(segment_not_present);
     idt.invalid_opcode.set_handler_fn(invalid_opcode);
@@ -33,11 +38,12 @@ pub static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
     idt.general_protection_fault
         .set_handler_fn(general_protection_fault);
 
-    idt[InterruptIndex::Timer as u8].set_handler_fn(timer_interrupt);
-    idt[InterruptIndex::ApicError as u8].set_handler_fn(lapic_error);
-    idt[InterruptIndex::ApicSpurious as u8].set_handler_fn(spurious_interrupt);
-    idt[InterruptIndex::Keyboard as u8].set_handler_fn(keyboard_interrupt);
-    idt[InterruptIndex::Mouse as u8].set_handler_fn(mouse_interrupt);
+    irq_manager_init();
+    irq_register(InterruptIndex::Timer as u8, timer_interrupt);
+    irq_register(InterruptIndex::ApicError as u8, lapic_error);
+    irq_register(InterruptIndex::ApicSpurious as u8, spurious_interrupt);
+    irq_register(InterruptIndex::Keyboard as u8, keyboard_interrupt);
+    irq_register(InterruptIndex::Mouse as u8, mouse_interrupt);
 
     unsafe {
         idt.double_fault
@@ -48,8 +54,7 @@ pub static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
     return idt;
 });
 
-#[naked]
-extern "x86-interrupt" fn timer_interrupt(_frame: InterruptStackFrame) {
+fn timer_interrupt(_irq: u8, _error: Option<u64>, _stack: InterruptStackFrame) {
     fn timer_handler(context: VirtAddr) -> VirtAddr {
         let mut schedulers = SCHEDULERS.lock();
         let current_cpu_id = get_lapic_id();
@@ -59,7 +64,6 @@ extern "x86-interrupt" fn timer_interrupt(_frame: InterruptStackFrame) {
 
         let address = scheduler.schedule(context);
 
-        super::apic::end_of_interrupt();
         address
     }
 
@@ -79,14 +83,12 @@ extern "x86-interrupt" fn timer_interrupt(_frame: InterruptStackFrame) {
     }
 }
 
-extern "x86-interrupt" fn lapic_error(_frame: InterruptStackFrame) {
+fn lapic_error(_irq: u8, _error: Option<u64>, _stack: InterruptStackFrame) {
     log::error!("Local APIC error!");
-    super::apic::end_of_interrupt();
 }
 
-extern "x86-interrupt" fn spurious_interrupt(_frame: InterruptStackFrame) {
+fn spurious_interrupt(_irq: u8, _error: Option<u64>, _stack: InterruptStackFrame) {
     log::debug!("Received spurious interrupt!");
-    super::apic::end_of_interrupt();
 }
 
 extern "x86-interrupt" fn segment_not_present(frame: InterruptStackFrame, error_code: u64) {
@@ -117,16 +119,14 @@ extern "x86-interrupt" fn double_fault(frame: InterruptStackFrame, error_code: u
     panic!("Unrecoverable fault occured, halting!");
 }
 
-extern "x86-interrupt" fn keyboard_interrupt(_frame: InterruptStackFrame) {
+fn keyboard_interrupt(_irq: u8, _error: Option<u64>, _stack: InterruptStackFrame) {
     let scancode: u8 = unsafe { PortReadOnly::new(0x60).read() };
     crate::drivers::keyboard::add_scancode(scancode);
-    super::apic::end_of_interrupt();
 }
 
-extern "x86-interrupt" fn mouse_interrupt(_frame: InterruptStackFrame) {
+fn mouse_interrupt(_irq: u8, _error: Option<u64>, _stack: InterruptStackFrame) {
     let packet = unsafe { PortReadOnly::new(0x60).read() };
     crate::drivers::mouse::MOUSE.lock().process_packet(packet);
-    super::apic::end_of_interrupt();
 }
 
 extern "x86-interrupt" fn page_fault(frame: InterruptStackFrame, error_code: PageFaultErrorCode) {
@@ -142,4 +142,35 @@ extern "x86-interrupt" fn page_fault(frame: InterruptStackFrame, error_code: Pag
         }
     }
     x86_64::instructions::hlt();
+}
+
+pub fn irq_default_handler(irq: u8, _error: Option<u64>, stack: InterruptStackFrame) {
+    log::warn!("default irq: irq = {:#x}, stack = {:?}", irq, stack);
+}
+
+static INTERRUPTS_TABLE: Mutex<
+    BTreeMap<u8, fn(irq: u8, error: Option<u64>, stack: InterruptStackFrame)>,
+> = Mutex::new(BTreeMap::new());
+
+fn irq_manager_init() {
+    for i in 0..255 {
+        irq_register(i, irq_default_handler);
+    }
+}
+
+fn do_irq(stack: InterruptStackFrame, irq: u8, error_code: Option<u64>) {
+    let table = INTERRUPTS_TABLE.lock();
+    let handler = table.get(&irq).expect(&format!("Cannot get irq {}", irq));
+
+    handler(irq, error_code, stack);
+
+    super::apic::end_of_interrupt();
+}
+
+pub fn irq_register(irq: u8, handler: fn(irq: u8, error: Option<u64>, stack: InterruptStackFrame)) {
+    INTERRUPTS_TABLE.lock().insert(irq, handler);
+}
+
+pub fn irq_unregister(_irq: u8) {
+    todo!()
 }
