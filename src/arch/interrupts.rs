@@ -51,12 +51,14 @@ pub static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
 #[naked]
 extern "x86-interrupt" fn timer_interrupt(_frame: InterruptStackFrame) {
     fn timer_handler(context: VirtAddr) -> VirtAddr {
-        let id = get_lapic_id();
-        let address = SCHEDULERS
-            .lock()
-            .get_mut(&id)
-            .expect(&format!("Failed to find Processor {}!", id))
-            .schedule(context);
+        let mut schedulers = SCHEDULERS.lock();
+        let current_cpu_id = get_lapic_id();
+        let scheduler = schedulers
+            .get_mut(&current_cpu_id)
+            .expect(&format!("Failed to find Processor {}!", current_cpu_id));
+
+        let address = scheduler.schedule(context);
+
         super::apic::end_of_interrupt();
         address
     }
