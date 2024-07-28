@@ -110,12 +110,14 @@ impl Scheduler {
         let last_thread = {
             let mut thread = self.current_thread.write();
             thread.context = Context::from_address(context);
+            thread.fpu_context.save();
             self.current_thread.clone()
         };
 
         let current_cpu_id = get_lapic_id();
         let next_thread = self.get_next(current_cpu_id as usize);
         if let None = next_thread {
+            last_thread.read().fpu_context.restore();
             return context;
         }
         let next_thread = next_thread.unwrap();
@@ -129,6 +131,8 @@ impl Scheduler {
 
         let kernel_address = next_thread.kernel_stack.end_address();
         CPUS.lock().current_cpu().1.set_ring0_rsp(kernel_address);
+
+        next_thread.fpu_context.restore();
 
         next_thread.context.address()
     }

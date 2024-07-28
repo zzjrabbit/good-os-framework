@@ -3,6 +3,7 @@ use x86_64::structures::paging::{FrameDeallocator, PhysFrame};
 use x86_64::{PhysAddr, VirtAddr};
 
 pub mod display;
+pub mod fpu;
 pub mod hpet;
 pub mod keyboard;
 pub mod mouse;

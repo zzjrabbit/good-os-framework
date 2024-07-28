@@ -11,6 +11,7 @@ use super::scheduler::KERNEL_PROCESS;
 use super::stack::{KernelStack, UserStack};
 use crate::arch::apic::get_lapic_id;
 use crate::arch::gdt::Selectors;
+use crate::drivers::fpu::FpState;
 use crate::memory::KERNEL_PAGE_TABLE;
 
 pub(super) type SharedThread = Arc<RwLock<Thread>>;
@@ -43,6 +44,7 @@ pub struct Thread {
     pub kernel_stack: KernelStack,
     pub context: Context,
     pub process: WeakSharedProcess,
+    pub fpu_context: FpState,
 }
 
 impl Thread {
@@ -54,6 +56,7 @@ impl Thread {
             context: Context::default(),
             kernel_stack: KernelStack::new(),
             process,
+            fpu_context: FpState::default(),
         };
 
         thread

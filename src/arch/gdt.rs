@@ -43,6 +43,8 @@ impl CpuInfo {
             CS::set_reg(selectors.code_selector);
             SS::set_reg(selectors.data_selector);
             load_tss(selectors.tss_selector);
+
+            //Efer::write(Efer::read() | EferFlags::FAST_FXSAVE_FXRSTOR);
         }
     }
 
