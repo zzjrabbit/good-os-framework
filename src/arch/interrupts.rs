@@ -29,14 +29,14 @@ pub enum InterruptIndex {
 pub static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
     let mut idt = InterruptDescriptorTable::new();
 
+    set_general_handler!(&mut idt, do_irq, 0..255);
+
     idt.breakpoint.set_handler_fn(breakpoint);
     idt.segment_not_present.set_handler_fn(segment_not_present);
     idt.invalid_opcode.set_handler_fn(invalid_opcode);
     idt.page_fault.set_handler_fn(page_fault);
     idt.general_protection_fault
         .set_handler_fn(general_protection_fault);
-
-    set_general_handler!(&mut idt, do_irq, 0..255);
 
     irq_manager_init();
     irq_register(InterruptIndex::Timer as u8, timer_interrupt);
