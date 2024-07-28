@@ -1,6 +1,7 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use alloc::collections::BTreeMap;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::{Lazy, Mutex, RwLock};
 use x86_64::instructions::interrupts;
@@ -22,9 +23,11 @@ static THREADS: Mutex<Vec<WeakSharedThread>> = Mutex::new(Vec::new());
 pub fn init() {
     add_process(KERNEL_PROCESS.clone());
 
+    let id = CPUS.lock().bsp_id();
+
     SCHEDULERS
         .lock()
-        .insert(CPUS.lock().bsp_id(), Scheduler::new());
+        .insert(id, Scheduler::new());
 
     //x86_64::instructions::interrupts::enable();
     SCHEDULER_INIT.store(true, Ordering::Relaxed);
@@ -41,18 +44,20 @@ pub fn add_process(process: SharedProcess) {
 #[inline]
 pub fn add_thread(thread: WeakSharedThread) {
     interrupts::without_interrupts(|| {
-        // 这里会卡死，不知道为什么，所以先注释掉
-        // let cpu_num = CPUS.lock().cpu_num();
-        let cpu_num = 2;
+        let cpu_num = CPUS.lock().cpu_num();
 
-        let mut min_loads_cpu_id: usize = thread.upgrade().unwrap().read().cpu_id;
-        let mut min_loads = THREADS.lock().len();
+        let mut threads = THREADS.lock();
+        let thread = thread.upgrade().unwrap();
+
+        let mut min_loads_cpu_id: usize = thread.read().cpu_id;
+        let mut min_loads = threads.len();
 
         for cpu_id in 0..cpu_num {
             let mut tmp_cpu_loads = 0;
-            if THREADS.lock().len() > 0 {
-                for thread in THREADS.lock().iter() {
-                    if thread.upgrade().unwrap().read().cpu_id != cpu_id {
+            if threads.len() > 0 {
+                for thread in threads.iter() {
+                    let thread = thread.upgrade().unwrap();
+                    if thread.read().cpu_id != cpu_id {
                         continue;
                     }
                     tmp_cpu_loads += 1;
@@ -67,11 +72,11 @@ pub fn add_thread(thread: WeakSharedThread) {
             }
         }
 
-        if min_loads_cpu_id != thread.upgrade().unwrap().read().cpu_id {
-            thread.upgrade().unwrap().write().cpu_id = min_loads_cpu_id;
+        if min_loads_cpu_id != thread.read().cpu_id {
+            thread.write().cpu_id = min_loads_cpu_id;
         }
 
-        THREADS.lock().push(thread);
+        threads.push(Arc::downgrade(&thread));
     });
 }
 
@@ -86,38 +91,34 @@ impl Scheduler {
         }
     }
 
-    pub fn get_next(&mut self) -> SharedThread {
+    pub fn get_next(&mut self, cpu_id: usize) -> Option<SharedThread> {
         let mut threads = THREADS.lock();
         let mut idx = 0;
         while idx < threads.len() {
             let thread0 = threads.remove(0);
             let thread = thread0.upgrade().unwrap();
             threads.push(thread0);
-            if thread.read().state == ThreadState::Ready {
-                return thread.clone();
+            if thread.read().state == ThreadState::Ready && thread.read().cpu_id == cpu_id {
+                return Some(thread.clone());
             }
             idx += 1;
         }
-        unreachable!()
+        None
     }
 
     pub fn schedule(&mut self, context: VirtAddr) -> VirtAddr {
-        //let _lock = crate::GLOBAL_MUTEX.lock();
-
-        //assert_eq!(self.current_thread.read().state, ThreadState::Running);
-
         let last_thread = {
             let mut thread = self.current_thread.write();
             thread.context = Context::from_address(context);
             self.current_thread.clone()
         };
 
-        let next_thread = self.get_next();
-
         let current_cpu_id = get_lapic_id();
-        if (current_cpu_id as usize) != next_thread.read().cpu_id {
+        let next_thread = self.get_next(current_cpu_id as usize);
+        if let None = next_thread {
             return context;
         }
+        let next_thread = next_thread.unwrap();
 
         next_thread.write().state = ThreadState::Running;
         self.current_thread = next_thread;
