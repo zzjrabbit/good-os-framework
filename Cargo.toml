@@ -7,6 +7,9 @@ description = "A simple operating system framework for framekernel written in Ru
 license = "MIT/Apache-2.0"
 keywords = ["os", "rust", "framework", "framekernel" ,"no_std"]
 
+[features]
+smp = []
+
 [dependencies]
 limine = "0.2.0"
 x86_64 = "0.15.1"

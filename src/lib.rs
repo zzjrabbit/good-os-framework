@@ -22,6 +22,7 @@ pub fn init_framework() {
     console::init();
     arch::smp::CPUS.lock().init_bsp();
     arch::interrupts::IDT.load();
+    #[cfg(feature = "smp")]
     arch::smp::CPUS.lock().init_ap();
     arch::acpi::init();
     drivers::hpet::init();
