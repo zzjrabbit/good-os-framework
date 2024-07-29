@@ -3,6 +3,7 @@ use limine::request::FramebufferRequest;
 
 use os_terminal::DrawTarget;
 
+
 #[used]
 #[link_section = ".requests"]
 static FRAMEBUFFER_REQUEST: FramebufferRequest = FramebufferRequest::new();
@@ -59,6 +60,10 @@ impl Display {
             bytes_per_pixel,
             pixel_format,
         }
+    }
+
+    pub fn get_frame_buffer(&self) -> &'static mut [u8] {
+        unsafe { from_raw_parts_mut(self.buffer.as_ptr() as *mut u8, self.buffer.len()) }
     }
 }
 
