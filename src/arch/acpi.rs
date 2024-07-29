@@ -1,8 +1,10 @@
+use acpi::mcfg::{Mcfg, McfgEntry};
 use acpi::platform::interrupt::Apic;
 use acpi::InterruptModel;
 use acpi::{AcpiHandler, AcpiTables, HpetInfo, PhysicalMapping};
 use alloc::alloc::Global;
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 use conquer_once::spin::OnceCell;
 use core::ptr::NonNull;
 use limine::request::RsdpRequest;
@@ -40,6 +42,7 @@ impl AcpiHandler for AcpiMemHandler {
 pub struct Acpi<'a> {
     pub apic_info: Apic<'a, Global>,
     pub hpet_info: HpetInfo,
+    pub mcfg_info: Vec<McfgEntry>,
 }
 
 pub fn init() {
@@ -68,8 +71,15 @@ pub fn init() {
 
     let hpet_info = HpetInfo::new(acpi_tables).expect("Failed to get HPET info!");
 
+    let mut mcfg_info = Vec::new();
+    let mcfg = acpi_tables.find_table::<Mcfg>().expect("Cannot get MCFG");
+    for entry in mcfg.entries() {
+        mcfg_info.push(*entry);
+    }
+
     ACPI.init_once(|| Acpi {
         apic_info,
         hpet_info,
+        mcfg_info,
     });
 }

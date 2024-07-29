@@ -25,9 +25,7 @@ pub fn init() {
 
     let id = CPUS.lock().bsp_id();
 
-    SCHEDULERS
-        .lock()
-        .insert(id, Scheduler::new());
+    SCHEDULERS.lock().insert(id, Scheduler::new());
 
     //x86_64::instructions::interrupts::enable();
     SCHEDULER_INIT.store(true, Ordering::Relaxed);
