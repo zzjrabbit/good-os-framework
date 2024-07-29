@@ -10,11 +10,11 @@ use core::{
 };
 use log::*;
 use spin::{Lazy, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use x86_64::structures::paging::{Mapper, Page, PageTableFlags, PhysFrame};
+use x86_64::structures::paging::{Page, PageTableFlags, PhysFrame};
 use x86_64::PhysAddr;
 
 use crate::arch::{PciArch, TraitPciArch};
-use crate::memory::{convert_physical_to_virtual, FRAME_ALLOCATOR, KERNEL_PAGE_TABLE};
+use crate::memory::{convert_physical_to_virtual, KERNEL_PAGE_TABLE};
 // PCI_DEVICE_LINKEDLIST 添加了读写锁的全局链表，里面存储了检索到的PCI设备结构体
 // PCI_ROOT_0 Segment为0的全局PciRoot
 pub static PCI_DEVICE_LINKEDLIST: Lazy<PciDeviceLinkedList> =
@@ -512,17 +512,13 @@ impl PciRoot {
         for i in 0..bus_number_double {
             let mut kernel_page_table = KERNEL_PAGE_TABLE.lock();
             unsafe {
-                kernel_page_table
-                    .map_to_with_table_flags(
-                        Page::containing_address(vaddr + i as u64 * 4096),
-                        PhysFrame::containing_address(paddr + i as u64 * 4096),
-                        PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-                        PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-                        &mut *FRAME_ALLOCATOR.lock(),
-                    )
-                    .expect("Cannot map to")
-                    .flush()
-            }
+                kernel_page_table.map_to_with_table_flags_general(
+                    Page::containing_address(vaddr + i as u64 * 4096),
+                    PhysFrame::containing_address(paddr + i as u64 * 4096),
+                    PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                    PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                )
+            };
         }
         self.mmio_base = Some(vaddr.as_u64() as *mut u32);
         Ok(0)
@@ -1253,21 +1249,18 @@ pub fn pci_bar_init(
             let paddr = PhysAddr::new(address);
             let vaddr = convert_physical_to_virtual(paddr);
 
-            // for i in 0..(size / 4096) {
-            //     let mut kernel_page_table = KERNEL_PAGE_TABLE.lock();
-            //     unsafe {
-            //         kernel_page_table
-            //             .map_to_with_table_flags(
-            //                 Page::containing_address(vaddr + i as u64 * 4096),
-            //                 PhysFrame::containing_address(paddr + i as u64 * 4096),
-            //                 PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-            //                 PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-            //                 &mut *FRAME_ALLOCATOR.lock(),
-            //             )
-            //             .expect("Cannot map to")
-            //             .flush()
-            //     }
-            // }
+            for i in 0..(size / 4096) {
+                let mut kernel_page_table = KERNEL_PAGE_TABLE.lock();
+                unsafe {
+                    kernel_page_table.map_to_with_table_flags_general(
+                        Page::containing_address(vaddr + i as u64 * 4096),
+                        PhysFrame::containing_address(paddr + i as u64 * 4096),
+                        PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                        PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                    )
+                };
+            }
+
             bar_info = BarInfo::Memory {
                 address_type,
                 prefetchable,
