@@ -55,8 +55,8 @@ pub fn ref_to_mut<T>(reffer: &T) -> &mut T {
     unsafe { &mut *(addr_of(reffer) as *const T as *mut T) }
 }
 
-pub fn ref_to_static<T>(reffer: &mut T) -> &'static mut T {
-    unsafe { &mut *(addr_of(reffer) as *mut T) }
+pub fn ref_to_static<T>(reffer: &T) -> &'static T {
+    unsafe { &*(addr_of(reffer) as *const T) }
 }
 
 #[macro_export]
