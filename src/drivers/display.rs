@@ -3,7 +3,6 @@ use limine::request::FramebufferRequest;
 
 use os_terminal::DrawTarget;
 
-
 #[used]
 #[link_section = ".requests"]
 static FRAMEBUFFER_REQUEST: FramebufferRequest = FramebufferRequest::new();
