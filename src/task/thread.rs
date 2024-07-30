@@ -105,8 +105,7 @@ impl Thread {
         process.threads.push_back(thread.clone());
     }
 
-    pub fn exit(&mut self) 
-    {
+    pub fn exit(&mut self) {
         self.kernel_stack.exit();
     }
 }

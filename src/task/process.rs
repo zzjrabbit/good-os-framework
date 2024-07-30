@@ -76,8 +76,7 @@ impl Process {
 
     pub fn exit(&mut self) {
         unsafe { self.page_table.clean_up(&mut *FRAME_ALLOCATOR.lock()) };
-        for thread in self.threads.iter()
-        {
+        for thread in self.threads.iter() {
             thread.write().exit();
         }
     }

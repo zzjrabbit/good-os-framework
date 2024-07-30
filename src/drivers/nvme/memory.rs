@@ -1,11 +1,10 @@
+use crate::drivers::alloc_for_dma;
+use alloc::boxed::Box;
 use core::{
     error::Error,
     ops::{Deref, DerefMut, Index, IndexMut, Range, RangeFull, RangeTo},
     slice,
 };
-
-use alloc::boxed::Box;
-use crate::drivers::alloc_for_dma;
 
 const PAGE_BITS: u32 = 12;
 pub const PAGE_SIZE: usize = 1 << PAGE_BITS;
