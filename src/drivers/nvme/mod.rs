@@ -5,6 +5,7 @@ mod queues;
 
 use crate::drivers::pci::{get_pci_device_structure_mut, PCI_DEVICE_LINKEDLIST};
 use alloc::vec::Vec;
+use memory::Dma;
 pub use nvme::{NvmeDevice, NvmeQueuePair};
 pub use queues::QUEUE_LENGTH;
 use spin::Mutex;
@@ -64,15 +65,19 @@ pub struct NvmeStats {
 }
 
 pub fn read_block(hd: usize, block_id: u64, buf: &mut [u8]) {
+    let dma: Dma<u8> = Dma::allocate(buf.len()).expect("Cannot allocate frame");
     let mut cons = NVME_CONS.lock();
     let nvme = cons.get_mut(hd).expect("Cannot get hd");
-    nvme.read_copied(buf, block_id).expect("Cannot read");
+    nvme.read(&dma, block_id).expect("Cannot read");
+    unsafe { buf.as_mut_ptr().copy_from(dma.virt, 512) };
 }
 
 pub fn write_block(hd: usize, block_id: u64, buf: &[u8]) {
+    let dma: Dma<u8> = Dma::allocate(buf.len()).expect("Cannot allocate frame");
+    unsafe { dma.virt.copy_from(buf.as_ptr(), 512) };
     let mut cons = NVME_CONS.lock();
     let nvme = cons.get_mut(hd).expect("Cannot get hd");
-    nvme.write_copied(buf, block_id).expect("Cannot write");
+    nvme.write(&dma, block_id).expect("Cannot write");
 }
 
 pub fn get_hd_num() -> usize {
