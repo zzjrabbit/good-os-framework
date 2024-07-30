@@ -4,19 +4,22 @@ mod nvme;
 mod queues;
 
 use crate::drivers::pci::{get_pci_device_structure_mut, PCI_DEVICE_LINKEDLIST};
-use alloc::vec::Vec;
+use alloc::{collections::btree_map::BTreeMap, vec::Vec};
 use memory::Dma;
 pub use nvme::{NvmeDevice, NvmeQueuePair};
 pub use queues::QUEUE_LENGTH;
 use spin::Mutex;
 
 static NVME_CONS: Mutex<Vec<NvmeDevice>> = Mutex::new(Vec::new());
+static NVME_SIZES: Mutex<BTreeMap<usize, usize>> = Mutex::new(BTreeMap::new());
 
 pub fn init() {
     let mut list = PCI_DEVICE_LINKEDLIST.write();
     let pci_devices = get_pci_device_structure_mut(&mut list, 0x01, 0x08);
     let mut nvme_cons = NVME_CONS.lock();
+    let mut nvme_sizes = NVME_SIZES.lock();
 
+    let mut idx = 0;
     for pci_device in pci_devices {
         if let None = pci_device.bar_init() {
             continue;
@@ -41,13 +44,20 @@ pub fn init() {
                     .identify_controller()
                     .expect("Cannot identify controller");
                 let ns = nvme_device.identify_namespace_list(0);
+
+                let mut nvmcap = 0;
                 for n in ns {
-                    nvme_device.identify_namespace(n);
+                    let cap = nvme_device.identify_namespace(n).1 as usize;
+                    nvmcap += cap;
                 }
 
                 nvme_cons.push(nvme_device);
+                log::info!("NVM capacity = {}", nvmcap);
+                nvme_sizes.insert(idx, nvmcap);
             }
         }
+
+        idx += 1;
     }
 }
 
@@ -83,4 +93,9 @@ pub fn write_block(hd: usize, block_id: u64, buf: &[u8]) {
 pub fn get_hd_num() -> usize {
     let cons = NVME_CONS.lock();
     cons.len()
+}
+
+pub fn get_hd_size(hd: usize) -> Option<usize> {
+    let cons = NVME_SIZES.lock();
+    cons.get(&hd).copied()
 }

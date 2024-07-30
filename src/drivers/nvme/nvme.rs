@@ -433,7 +433,7 @@ impl NvmeDevice {
             .collect::<Vec<u32>>()
     }
 
-    pub fn identify_namespace(&mut self, id: u32) -> NvmeNamespace {
+    pub fn identify_namespace(&mut self, id: u32) -> (NvmeNamespace, u64) {
         self.submit_and_complete_admin(|c_id, addr| {
             NvmeCommand::identify_namespace(c_id, addr, id)
         });
@@ -463,7 +463,7 @@ impl NvmeDevice {
             block_size,
         };
         self.namespaces.insert(id, namespace);
-        namespace
+        (namespace, blocks * block_size)
     }
 
     // TODO: currently namespace 1 is hardcoded
