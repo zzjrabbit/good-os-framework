@@ -1,4 +1,5 @@
 use core::sync::atomic::{AtomicBool, Ordering};
+use core::usize;
 
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
@@ -134,4 +135,19 @@ impl Scheduler {
 
         next_thread.context.address()
     }
+}
+
+pub fn exit(_code: usize) -> usize {
+    let schedulers = SCHEDULERS.lock();
+    let current_scheduler_option = schedulers.get(&get_lapic_id());
+
+    if current_scheduler_option.is_some() {
+        let current_scheduler = current_scheduler_option.unwrap();
+        let current_process = &current_scheduler.current_thread.read().process;
+        current_process.upgrade().unwrap().write().exit();
+    } else {
+        log::warn!("current thead is None");
+    }
+
+    usize::MAX
 }

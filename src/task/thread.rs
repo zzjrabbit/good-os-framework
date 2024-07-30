@@ -104,4 +104,9 @@ impl Thread {
         add_thread(Arc::downgrade(&thread));
         process.threads.push_back(thread.clone());
     }
+
+    pub fn exit(&mut self) 
+    {
+        self.kernel_stack.exit();
+    }
 }

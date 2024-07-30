@@ -1,4 +1,6 @@
-use alloc::boxed::Box;
+use core::alloc::Layout;
+
+use alloc::{alloc::dealloc, boxed::Box};
 use x86_64::{structures::paging::PageTableFlags, VirtAddr};
 
 use crate::memory::{GeneralPageTable, MemoryManager};
@@ -16,6 +18,10 @@ impl KernelStack {
 
     pub fn end_address(&self) -> VirtAddr {
         VirtAddr::new(self.0.as_ptr_range().end as u64)
+    }
+
+    pub fn exit(&mut self) {
+        unsafe { dealloc(self.0.as_mut_ptr(), Layout::new::<Box<[u8]>>()) };
     }
 }
 
