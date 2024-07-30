@@ -1,8 +1,9 @@
 #![no_std]
-#![feature(allocator_api)]
-#![feature(naked_functions)]
 #![feature(abi_x86_interrupt)]
 #![feature(alloc_error_handler)]
+#![feature(allocator_api)]
+#![feature(error_in_core)]
+#![feature(naked_functions)]
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -37,6 +38,7 @@ pub fn init_framework() {
     arch::apic::init();
     drivers::mouse::init();
     drivers::pci::init();
+    drivers::nvme::init();
     user::init();
     task::scheduler::init();
 }
