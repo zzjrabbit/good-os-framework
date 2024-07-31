@@ -7,6 +7,7 @@ use spin::RwLock;
 use super::context::Context;
 use super::process::WeakSharedProcess;
 use super::scheduler::add_thread;
+use super::scheduler::get_threads;
 use super::scheduler::KERNEL_PROCESS;
 use super::stack::{KernelStack, UserStack};
 use crate::arch::apic::get_lapic_id;
@@ -103,5 +104,14 @@ impl Thread {
         let thread = Arc::new(RwLock::new(thread));
         add_thread(Arc::downgrade(&thread));
         process.threads.push_back(thread.clone());
+    }
+
+    pub fn exit(&mut self) {
+        for (index, thread) in get_threads().iter().enumerate() {
+            if thread.upgrade().unwrap().read().id == self.id {
+                get_threads().remove(index);
+            }
+        }
+        self.kernel_stack.exit();
     }
 }

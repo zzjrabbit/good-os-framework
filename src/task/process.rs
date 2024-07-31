@@ -6,13 +6,14 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use object::{File, Object, ObjectSegment};
 use spin::RwLock;
 use x86_64::instructions::interrupts;
+use x86_64::structures::paging::mapper::CleanUp;
 use x86_64::structures::paging::PageTableFlags;
 use x86_64::VirtAddr;
 
 use super::thread::{SharedThread, Thread};
-use crate::memory::GeneralPageTable;
 use crate::memory::MemoryManager;
 use crate::memory::{create_page_table_from_kernel, HeapType, ProcessHeap};
+use crate::memory::{GeneralPageTable, FRAME_ALLOCATOR};
 use crate::task::scheduler::add_process;
 
 pub(super) type SharedProcess = Arc<RwLock<Process>>;
@@ -71,6 +72,14 @@ impl Process {
         Thread::new_user_thread(Arc::downgrade(&process), binary.entry() as usize);
         add_process(process.clone());
         process
+    }
+
+    pub fn exit(&mut self) {
+        unsafe { self.page_table.clean_up(&mut *FRAME_ALLOCATOR.lock()) };
+
+        for thread in self.threads.iter() {
+            thread.write().exit();
+        }
     }
 }
 

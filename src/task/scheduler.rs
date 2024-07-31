@@ -1,16 +1,17 @@
 use core::sync::atomic::{AtomicBool, Ordering};
+use core::usize;
 
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use spin::{Lazy, Mutex, RwLock};
+use spin::{Lazy, Mutex, MutexGuard, RwLock};
 use x86_64::instructions::interrupts;
 use x86_64::VirtAddr;
 
 use super::context::Context;
 use super::process::SharedProcess;
 use super::thread::{SharedThread, ThreadState, WeakSharedThread};
-use super::{Process, Thread};
+use super::{schedule, Process, Thread};
 use crate::arch::apic::get_lapic_id;
 use crate::arch::smp::CPUS;
 
@@ -134,4 +135,30 @@ impl Scheduler {
 
         next_thread.context.address()
     }
+}
+
+pub fn get_threads() -> MutexGuard<'static, Vec<WeakSharedThread>> {
+    THREADS.lock()
+}
+
+pub fn exit(_code: usize) -> usize {
+    let schedulers = SCHEDULERS.lock();
+    let current_scheduler_option = schedulers.get(&get_lapic_id());
+
+    if current_scheduler_option.is_some() {
+        let current_scheduler = current_scheduler_option.unwrap();
+        let current_process = &current_scheduler.current_thread.read().process;
+        for (index, process) in PROCESSES.read().iter().enumerate() {
+            if process.read().id == current_process.upgrade().unwrap().read().id {
+                PROCESSES.write().remove(index);
+            }
+        }
+        current_process.upgrade().unwrap().write().exit();
+    } else {
+        log::warn!("current thead is None");
+    }
+
+    schedule();
+
+    usize::MAX
 }

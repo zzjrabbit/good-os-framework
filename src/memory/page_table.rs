@@ -6,7 +6,9 @@ use x86_64::structures::paging::{Page, Size4KiB};
 use x86_64::structures::paging::{PageTable, PageTableFlags, PhysFrame};
 use x86_64::{PhysAddr, VirtAddr};
 
-use super::{convert_physical_to_virtual, BitmapFrameAllocator, PHYSICAL_MEMORY_OFFSET};
+use super::{
+    convert_physical_to_virtual, BitmapFrameAllocator, FRAME_ALLOCATOR, PHYSICAL_MEMORY_OFFSET,
+};
 
 #[derive(Debug)]
 pub struct GeneralPageTable {
@@ -98,6 +100,43 @@ impl GeneralPageTable {
                 target_page_table_next,
                 page_table_level - 1,
             );
+        }
+    }
+
+    pub unsafe fn map_to_with_table_flags_general(
+        &mut self,
+        page: Page<Size4KiB>,
+        frame: PhysFrame<Size4KiB>,
+        flags: PageTableFlags,
+        parent_table_flags: PageTableFlags,
+    ) {
+        let result = self.map_to_with_table_flags(
+            page,
+            frame,
+            flags,
+            parent_table_flags,
+            &mut *FRAME_ALLOCATOR.lock(),
+        );
+
+        match result {
+            Ok(flusher) => flusher.flush(),
+            Err(err) => match err {
+                MapToError::ParentEntryHugePage => {}
+                MapToError::PageAlreadyMapped(_) => {
+                    self.inner.unmap(page).expect("Cannot unmap to").1.flush();
+                    self.inner
+                        .map_to_with_table_flags(
+                            page,
+                            frame,
+                            flags,
+                            parent_table_flags,
+                            &mut *FRAME_ALLOCATOR.lock(),
+                        )
+                        .unwrap()
+                        .flush()
+                }
+                MapToError::FrameAllocationFailed => panic!("Out of memory"),
+            },
         }
     }
 }
