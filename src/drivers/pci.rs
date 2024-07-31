@@ -989,9 +989,9 @@ pub fn init() {
                     common_header.class_code, common_header.subclass, common_header.status
                 );
             }
-            HeaderType::PciPciBridge if common_header.status & 0x10 != 0 => {
-                info!("Found pci-to-pci bridge device with class code ={} subclass={} status={:#x} cap_pointer={:#x}", common_header.class_code, common_header.subclass, common_header.status, box_pci_device.as_standard_device().unwrap().capabilities_pointer);
-            }
+            //HeaderType::PciPciBridge if common_header.status & 0x10 != 0 => {
+            //    info!("Found pci-to-pci bridge device with class code ={} subclass={} status={:#x} cap_pointer={:#x}", common_header.class_code, common_header.subclass, common_header.status, box_pci_device.as_standard_device().unwrap().capabilities_pointer);
+            //}
             HeaderType::PciPciBridge => {
                 info!(
                     "Found pci-to-pci bridge device with class code ={} subclass={} status={:#x} ",
