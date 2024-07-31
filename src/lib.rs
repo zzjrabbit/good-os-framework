@@ -2,7 +2,6 @@
 #![feature(abi_x86_interrupt)]
 #![feature(alloc_error_handler)]
 #![feature(allocator_api)]
-#![feature(error_in_core)]
 #![feature(naked_functions)]
 
 use core::sync::atomic::{AtomicBool, Ordering};
