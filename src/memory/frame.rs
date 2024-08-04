@@ -1,37 +1,11 @@
-use bit_field::BitField;
 use limine::memory_map::EntryType;
 use limine::response::MemoryMapResponse;
 use x86_64::structures::paging::{FrameAllocator, PhysFrame};
 use x86_64::structures::paging::{FrameDeallocator, Size4KiB};
 use x86_64::PhysAddr;
 
+use crate::data::bitmap::Bitmap;
 use crate::memory::convert_physical_to_virtual;
-
-pub struct Bitmap {
-    inner: &'static mut [u8],
-}
-
-impl Bitmap {
-    pub fn new(inner: &'static mut [u8]) -> Self {
-        inner.fill(0);
-        Self { inner }
-    }
-
-    pub fn len(&self) -> usize {
-        self.inner.len()
-    }
-
-    pub fn get(&self, index: usize) -> bool {
-        let byte = self.inner[index / 8];
-        byte.get_bit(index % 8)
-    }
-
-    pub fn set(&mut self, index: usize, value: bool) {
-        let byte = &mut self.inner[index / 8];
-        byte.set_bit(index % 8, value);
-    }
-}
-
 pub struct BitmapFrameAllocator {
     bitmap: Bitmap,
     usable_frames: usize,

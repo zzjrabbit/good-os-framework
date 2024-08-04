@@ -23,21 +23,21 @@ unsafe extern "C" fn ap_entry(smp_info: &Cpu) -> ! {
     CPUS.lock().get_cpu(smp_info.lapic_id as usize).load();
     IDT.load();
 
-    while !HPET_INIT.load(Ordering::Relaxed) {}
+    while !HPET_INIT.load(Ordering::SeqCst) {}
 
     let mut lapic = get_lapic();
     lapic.enable();
     calibrate_timer(&mut lapic);
     lapic.enable_timer();
 
-    while !SCHEDULER_INIT.load(Ordering::Relaxed) {}
+    while !SCHEDULER_INIT.load(Ordering::SeqCst) {}
     SCHEDULERS
         .lock()
         .insert(smp_info.lapic_id, Scheduler::new());
 
     user::init();
 
-    while !START_SCHEDULE.load(Ordering::Relaxed) {}
+    while !START_SCHEDULE.load(Ordering::SeqCst) {}
     x86_64::instructions::interrupts::enable();
 
     loop {

@@ -178,4 +178,33 @@ impl ProcessHeap {
         self.allocator.dealloc(ptr, layout);
         self.usable_size += layout.size();
     }
+
+    pub fn clear(&mut self) {
+        let page_cnt = (self.size + 4095) / 4096;
+        let mut frame_allocator = FRAME_ALLOCATOR.lock();
+        let process = self.process.as_ref().unwrap().upgrade().unwrap();
+        let process = process.read();
+
+        let process = ref_to_mut(&*process);
+        for page in 0..page_cnt {
+            let page = Page::containing_address(VirtAddr::new(HEAP_START + page as u64 * 4096));
+            let frame = {
+                let (frame, mapper_flush) = process
+                    .page_table
+                    .unmap(page)
+                    .unwrap();
+
+                mapper_flush.flush();
+
+                frame
+            };
+            use x86_64::structures::paging::FrameDeallocator;
+            unsafe {
+                frame_allocator.deallocate_frame(frame);
+            }
+        }
+        self.allocator.0.lock().clear();
+        self.size = 0;
+        self.usable_size = 0;
+    }
 }

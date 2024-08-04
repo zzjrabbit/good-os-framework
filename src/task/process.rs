@@ -10,7 +10,9 @@ use x86_64::structures::paging::mapper::CleanUp;
 use x86_64::structures::paging::PageTableFlags;
 use x86_64::VirtAddr;
 
-use super::thread::{SharedThread, Thread};
+use super::scheduler::get_process;
+use super::signal::SignalManager;
+use super::thread::{SharedThread, Thread, ThreadState};
 use crate::memory::MemoryManager;
 use crate::memory::{create_page_table_from_kernel, HeapType, ProcessHeap};
 use crate::memory::{GeneralPageTable, FRAME_ALLOCATOR};
@@ -38,17 +40,29 @@ pub struct Process {
     pub page_table: GeneralPageTable,
     pub threads: VecDeque<SharedThread>,
     pub heap: ProcessHeap,
+    pub signal_manager: SignalManager,
+    pub father: Option<WeakSharedProcess>,
+}
+
+fn create_wake_up_function(id: ProcessId) {
+    let process = get_process(id).unwrap();
+    for thread in process.read().threads.iter() {
+        thread.write().state = ThreadState::Ready;
+    }
 }
 
 impl Process {
     pub fn new(name: &str, heap_type: HeapType) -> Self {
         let page_table = create_page_table_from_kernel();
+        let pid = ProcessId::new();
         let process = Process {
-            id: ProcessId::new(),
+            id: pid,
             name: String::from(name),
             page_table,
             threads: Default::default(),
             heap: ProcessHeap::new(heap_type),
+            signal_manager: SignalManager::new(64, create_wake_up_function, pid),
+            father: None,
         };
 
         process
@@ -73,13 +87,11 @@ impl Process {
         add_process(process.clone());
         process
     }
+}
 
-    pub fn exit(&mut self) {
+impl Drop for Process {
+    fn drop(&mut self) {
         unsafe { self.page_table.clean_up(&mut *FRAME_ALLOCATOR.lock()) };
-
-        for thread in self.threads.iter() {
-            thread.write().exit();
-        }
     }
 }
 

@@ -24,7 +24,10 @@ good_memory_allocator = "0.1.7"
 vte = "0.13.0"
 colorz = "1.1.2"
 xhci = "0.9.2"
-os-terminal = "0.2.7"
+
+[dependencies.os-terminal]
+version = "0.2.7"
+# path = "../os-terminal"
 
 [dependencies.pci]
 package = "pci-for-framework"

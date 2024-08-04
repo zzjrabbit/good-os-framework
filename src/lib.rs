@@ -3,6 +3,7 @@
 #![feature(alloc_error_handler)]
 #![feature(allocator_api)]
 #![feature(naked_functions)]
+#![feature(fn_traits)]
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -10,6 +11,7 @@ extern crate alloc;
 
 pub mod arch;
 pub mod console;
+pub mod data;
 pub mod drivers;
 pub mod memory;
 pub mod task;
@@ -44,7 +46,7 @@ pub fn init_framework() {
 
 #[inline]
 pub fn start_schedule() {
-    START_SCHEDULE.store(true, Ordering::Relaxed);
+    START_SCHEDULE.store(true, Ordering::SeqCst);
     x86_64::instructions::interrupts::enable();
 }
 

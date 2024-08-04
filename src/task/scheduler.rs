@@ -9,7 +9,7 @@ use x86_64::instructions::interrupts;
 use x86_64::VirtAddr;
 
 use super::context::Context;
-use super::process::SharedProcess;
+use super::process::{ProcessId, SharedProcess};
 use super::thread::{SharedThread, ThreadState, WeakSharedThread};
 use super::{schedule, Process, Thread};
 use crate::arch::apic::get_lapic_id;
@@ -18,7 +18,7 @@ use crate::arch::smp::CPUS;
 pub static SCHEDULER_INIT: AtomicBool = AtomicBool::new(false);
 pub static SCHEDULERS: Mutex<BTreeMap<u32, Scheduler>> = Mutex::new(BTreeMap::new());
 pub static KERNEL_PROCESS: Lazy<SharedProcess> = Lazy::new(|| Process::new_kernel_process());
-static PROCESSES: RwLock<Vec<SharedProcess>> = RwLock::new(Vec::new());
+static PROCESSES: RwLock<BTreeMap<ProcessId, SharedProcess>> = RwLock::new(BTreeMap::new());
 static THREADS: Mutex<Vec<WeakSharedThread>> = Mutex::new(Vec::new());
 
 pub fn init() {
@@ -29,14 +29,18 @@ pub fn init() {
     SCHEDULERS.lock().insert(id, Scheduler::new());
 
     //x86_64::instructions::interrupts::enable();
-    SCHEDULER_INIT.store(true, Ordering::Relaxed);
+    SCHEDULER_INIT.store(true, Ordering::SeqCst);
     log::info!("Scheduler initialized!");
+}
+
+pub fn get_process(pid: ProcessId) -> Option<SharedProcess> {
+    PROCESSES.read().get(&pid).cloned()
 }
 
 #[inline]
 pub fn add_process(process: SharedProcess) {
     interrupts::without_interrupts(|| {
-        PROCESSES.write().push(process.clone());
+        PROCESSES.write().insert(process.read().id, process.clone());
     });
 }
 
@@ -110,30 +114,40 @@ impl Scheduler {
             let mut thread = self.current_thread.write();
             thread.context = Context::from_address(context);
             thread.fpu_context.save();
+            thread.vruntime -= 1;
             self.current_thread.clone()
         };
 
-        let current_cpu_id = get_lapic_id();
-        let next_thread = self.get_next(current_cpu_id as usize);
-        if let None = next_thread {
-            last_thread.read().fpu_context.restore();
-            return context;
+        if last_thread.read().vruntime <= 0 {
+            let current_cpu_id = get_lapic_id();
+            let next_thread = self.get_next(current_cpu_id as usize);
+            if let None = next_thread {
+                last_thread.read().fpu_context.restore();
+                return context;
+            }
+            let next_thread = next_thread.unwrap();
+
+            next_thread.write().state = ThreadState::Running;
+            self.current_thread = next_thread;
+
+            let last_thread_priority = last_thread.read().priority;
+            last_thread.write().vruntime = last_thread_priority;
+            last_thread.write().state = ThreadState::Ready;
+
+            let next_thread = self.current_thread.read();
+
+           //crate::print!("[{}]",next_thread.id.0);
+
+            let kernel_address = next_thread.kernel_stack.end_address();
+            CPUS.lock().current_cpu().1.set_ring0_rsp(kernel_address);
+
+            next_thread.fpu_context.restore();
+
+            return next_thread.context.address();
         }
-        let next_thread = next_thread.unwrap();
 
-        next_thread.write().state = ThreadState::Running;
-        self.current_thread = next_thread;
-
-        last_thread.write().state = ThreadState::Ready;
-
-        let next_thread = self.current_thread.read();
-
-        let kernel_address = next_thread.kernel_stack.end_address();
-        CPUS.lock().current_cpu().1.set_ring0_rsp(kernel_address);
-
-        next_thread.fpu_context.restore();
-
-        next_thread.context.address()
+        last_thread.read().fpu_context.restore();
+        return context;
     }
 }
 
@@ -141,24 +155,28 @@ pub fn get_threads() -> MutexGuard<'static, Vec<WeakSharedThread>> {
     THREADS.lock()
 }
 
-pub fn exit(_code: usize) -> usize {
+pub fn exit() {
     let schedulers = SCHEDULERS.lock();
     let current_scheduler_option = schedulers.get(&get_lapic_id());
 
-    if current_scheduler_option.is_some() {
-        let current_scheduler = current_scheduler_option.unwrap();
+    if let Some(current_scheduler) = current_scheduler_option {
         let current_process = &current_scheduler.current_thread.read().process;
-        for (index, process) in PROCESSES.read().iter().enumerate() {
-            if process.read().id == current_process.upgrade().unwrap().read().id {
-                PROCESSES.write().remove(index);
-            }
-        }
-        current_process.upgrade().unwrap().write().exit();
+        let current_process = current_process.upgrade().unwrap();
+
+        let pid = current_process.read().id;
+
+        current_process.write().heap.clear();
+
+        drop(current_process);
+
+        PROCESSES.write().remove(&pid);
     } else {
         log::warn!("current thead is None");
     }
 
+    drop(schedulers);
+
     schedule();
 
-    usize::MAX
 }
+

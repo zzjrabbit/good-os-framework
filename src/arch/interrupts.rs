@@ -51,6 +51,7 @@ pub static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
 #[naked]
 extern "x86-interrupt" fn timer_interrupt(_frame: InterruptStackFrame) {
     fn timer_handler(context: VirtAddr) -> VirtAddr {
+        crate::print!(".");
         let mut schedulers = SCHEDULERS.lock();
         let current_cpu_id = get_lapic_id();
         let scheduler = schedulers
@@ -118,6 +119,7 @@ extern "x86-interrupt" fn double_fault(frame: InterruptStackFrame, error_code: u
 }
 
 extern "x86-interrupt" fn keyboard_interrupt(_frame: InterruptStackFrame) {
+    crate::print!(".");
     let scancode: u8 = unsafe { PortReadOnly::new(0x60).read() };
     crate::drivers::keyboard::add_scancode(scancode);
     super::apic::end_of_interrupt();

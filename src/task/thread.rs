@@ -41,6 +41,8 @@ pub enum ThreadState {
 pub struct Thread {
     pub id: ThreadId,
     pub cpu_id: usize,
+    pub priority: isize,
+    pub vruntime: isize,
     pub state: ThreadState,
     pub kernel_stack: KernelStack,
     pub context: Context,
@@ -48,11 +50,16 @@ pub struct Thread {
     pub fpu_context: FpState,
 }
 
+pub const KERNEL_PRIROITY: isize = 10;
+pub const USER_PRIROITY: isize = 20;
+
 impl Thread {
-    pub fn new(process: WeakSharedProcess) -> Self {
+    pub fn new(process: WeakSharedProcess, priority: isize) -> Self {
         let thread = Thread {
             id: ThreadId::new(),
             cpu_id: get_lapic_id() as usize,
+            priority,
+            vruntime: -1,
             state: ThreadState::Ready,
             context: Context::default(),
             kernel_stack: KernelStack::new(),
@@ -64,7 +71,7 @@ impl Thread {
     }
 
     pub fn new_init_thread() -> SharedThread {
-        let thread = Self::new(Arc::downgrade(&KERNEL_PROCESS));
+        let thread = Self::new(Arc::downgrade(&KERNEL_PROCESS), KERNEL_PRIROITY);
         let thread = Arc::new(RwLock::new(thread));
         thread.write().state = ThreadState::Running;
         KERNEL_PROCESS.write().threads.push_back(thread.clone());
@@ -74,7 +81,7 @@ impl Thread {
     }
 
     pub fn new_kernel_thread(function: fn()) {
-        let mut thread = Self::new(Arc::downgrade(&KERNEL_PROCESS));
+        let mut thread = Self::new(Arc::downgrade(&KERNEL_PROCESS), KERNEL_PRIROITY);
 
         thread.context.init(
             function as usize,
@@ -89,7 +96,7 @@ impl Thread {
     }
 
     pub fn new_user_thread(process: WeakSharedProcess, entry_point: usize) {
-        let mut thread = Self::new(process.clone());
+        let mut thread = Self::new(process.clone(), USER_PRIROITY);
         let process = process.upgrade().unwrap();
         let mut process = process.write();
         let user_stack = UserStack::new(&mut process.page_table);
@@ -105,13 +112,15 @@ impl Thread {
         add_thread(Arc::downgrade(&thread));
         process.threads.push_back(thread.clone());
     }
+}
 
-    pub fn exit(&mut self) {
+impl Drop for Thread {
+    fn drop(&mut self) {
         for (index, thread) in get_threads().iter().enumerate() {
             if thread.upgrade().unwrap().read().id == self.id {
                 get_threads().remove(index);
+                break;
             }
         }
-        self.kernel_stack.exit();
     }
 }

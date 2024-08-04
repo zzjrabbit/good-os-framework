@@ -19,7 +19,7 @@ pub fn init() {
     log::debug!("HPET clock speed: {} femto seconds", HPET.clock_speed());
     log::debug!("HPET timers: {} available", HPET.timers_count());
 
-    HPET_INIT.store(true, Ordering::Relaxed);
+    HPET_INIT.store(true, Ordering::SeqCst);
 }
 
 pub struct Hpet {
