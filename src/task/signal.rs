@@ -50,7 +50,6 @@ impl SignalManager {
 
     pub fn get_signal(&mut self, signal_type: usize) -> Option<Signal> {
         if self.signal_bitmap.get(signal_type) {
-            self.signal_bitmap.set(signal_type, false);
             for idx in 0..self.signals.len() {
                 if self.signals[idx].ty == signal_type {
                     let signal = self.signals[idx];

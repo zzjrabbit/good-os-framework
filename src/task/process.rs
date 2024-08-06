@@ -46,9 +46,17 @@ pub struct Process {
 
 fn create_wake_up_function(id: ProcessId) {
     let process = get_process(id).unwrap();
-    for thread in process.read().threads.iter() {
-        thread.write().state = ThreadState::Ready;
+    unsafe {
+        process.force_write_unlock();
     }
+    for thread in process.read().threads.iter() {
+        unsafe {
+            thread.force_write_unlock();
+        }
+        thread.write().state = ThreadState::Ready;
+        log::info!("waking up thread {}",thread.read().id.0);
+    }
+    log::info!("Woke up {:?}",id);
 }
 
 impl Process {
@@ -82,7 +90,7 @@ impl Process {
         let process = Arc::new(RwLock::new(Self::new(name, HeapType::User)));
         process.read().heap.init(Arc::downgrade(&process));
         ProcessBinary::map_segments(&binary, &mut process.write().page_table);
-        log::info!("User Entry Point: {:x}", binary.entry());
+        log::info!("User Entry Point: {:x} ID: {:?}", binary.entry(),process.read().id);
         Thread::new_user_thread(Arc::downgrade(&process), binary.entry() as usize);
         add_process(process.clone());
         process

@@ -51,7 +51,7 @@ pub static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
 #[naked]
 extern "x86-interrupt" fn timer_interrupt(_frame: InterruptStackFrame) {
     fn timer_handler(context: VirtAddr) -> VirtAddr {
-        crate::print!(".");
+        super::apic::end_of_interrupt();
         let mut schedulers = SCHEDULERS.lock();
         let current_cpu_id = get_lapic_id();
         let scheduler = schedulers
@@ -60,7 +60,8 @@ extern "x86-interrupt" fn timer_interrupt(_frame: InterruptStackFrame) {
 
         let address = scheduler.schedule(context);
 
-        super::apic::end_of_interrupt();
+        //crate::serial_print!(".");
+        //crate::serial_print!(".");
         address
     }
 
@@ -100,6 +101,21 @@ extern "x86-interrupt" fn general_protection_fault(frame: InterruptStackFrame, e
     //log::error!("Processor: {}", get_lapic_id());
     log::error!("Exception: General Protection Fault\n{:#?}", frame);
     log::error!("Error Code: {:#x}", error_code);
+    if (error_code & 0x1) != 0 {
+        log::error!("The exception occurred during delivery of an event external to the program,such as an interrupt or an earlier exception.");
+    }
+    if (error_code & 0x2) != 0 {
+        log::error!("Refers to a gate descriptor in the IDT")
+    } else {
+        if (error_code & 0x4) != 0 {
+            log::error!("Refers to a segment or gate descriptor in the LDT");
+        } else {
+            log::error!("Refers to a segment or gate descriptor in the LDT");
+        }
+    }
+
+    log::error!("Segment Selector Index: {}", error_code & 0xfff8);
+
     x86_64::instructions::hlt();
 }
 
@@ -119,7 +135,6 @@ extern "x86-interrupt" fn double_fault(frame: InterruptStackFrame, error_code: u
 }
 
 extern "x86-interrupt" fn keyboard_interrupt(_frame: InterruptStackFrame) {
-    crate::print!(".");
     let scancode: u8 = unsafe { PortReadOnly::new(0x60).read() };
     crate::drivers::keyboard::add_scancode(scancode);
     super::apic::end_of_interrupt();

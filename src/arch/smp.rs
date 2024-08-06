@@ -1,11 +1,13 @@
 use core::sync::atomic::Ordering;
 
+use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use limine::request::SmpRequest;
+use limine::response::SmpResponse;
 use limine::smp::Cpu;
 use spin::{Lazy, Mutex};
 
-use super::apic::{calibrate_timer, get_lapic_id};
+use super::apic::calibrate_timer;
 use super::gdt::CpuInfo;
 use super::interrupts::IDT;
 use crate::arch::apic::get_lapic;
@@ -18,9 +20,12 @@ use crate::{user, START_SCHEDULE};
 static SMP_REQUEST: SmpRequest = SmpRequest::new();
 
 pub static CPUS: Lazy<Mutex<Cpus>> = Lazy::new(|| Mutex::new(Cpus::new()));
+pub static BSP_LAPIC_ID: Lazy<u32> = Lazy::new(|| SMP_RESPONSE.bsp_lapic_id());
+static SMP_RESPONSE: Lazy<&SmpResponse> = Lazy::new(|| SMP_REQUEST.get_response().unwrap());
 
 unsafe extern "C" fn ap_entry(smp_info: &Cpu) -> ! {
-    CPUS.lock().get_cpu(smp_info.lapic_id as usize).load();
+
+    CPUS.lock().get(smp_info.lapic_id).load();
     IDT.load();
 
     while !HPET_INIT.load(Ordering::SeqCst) {}
@@ -42,71 +47,52 @@ unsafe extern "C" fn ap_entry(smp_info: &Cpu) -> ! {
 
     loop {
         x86_64::instructions::hlt();
+        //crate::serial_print!(".");
     }
 }
 
-pub struct Cpus {
-    bsp: CpuInfo,
-    bsp_lapic_id: u32,
-    ap_infos: BTreeMap<u32, CpuInfo>,
+pub struct Cpus(BTreeMap<u32, &'static mut CpuInfo>);
+
+impl Cpus {
+    pub fn get(&self, lapic_id: u32) -> &CpuInfo {
+        self.0.get(&lapic_id).unwrap()
+    }
+
+    pub fn get_mut(&mut self, lapic_id: u32) -> &mut CpuInfo {
+        self.0.get_mut(&lapic_id).unwrap()
+    }
+
+    pub fn iter_id(&self) -> impl Iterator<Item = &u32> {
+        self.0.keys()
+    }
 }
 
 impl Cpus {
     pub fn new() -> Self {
-        let response = SMP_REQUEST.get_response().unwrap();
+        let mut cpus = BTreeMap::new();
+        cpus.insert(*BSP_LAPIC_ID, Box::leak(Box::new(CpuInfo::new())));
+        Cpus(cpus)
+    }
 
-        Self {
-            bsp: CpuInfo::new(),
-            bsp_lapic_id: response.bsp_lapic_id(),
-            ap_infos: BTreeMap::new(),
-        }
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 
     pub fn init_bsp(&mut self) {
-        self.bsp.init();
-        self.bsp.load();
+        let bsp_info = self.get_mut(*BSP_LAPIC_ID);
+        bsp_info.init();
+        bsp_info.load();
     }
 
     pub fn init_ap(&mut self) {
-        let response = SMP_REQUEST.get_response().unwrap();
-
-        for cpu in response.cpus() {
-            if cpu.lapic_id != self.bsp_lapic_id {
-                let info = CpuInfo::new();
-                self.ap_infos.insert(cpu.lapic_id, info);
-
-                let info = self.ap_infos.get_mut(&cpu.lapic_id).unwrap();
-                info.init();
-
-                cpu.goto_address.write(ap_entry);
+        for cpu in SMP_RESPONSE.cpus() {
+            if cpu.id == *BSP_LAPIC_ID {
+                continue;
             }
+            let info = Box::leak(Box::new(CpuInfo::new()));
+            info.init();
+            self.0.insert(cpu.lapic_id, info);
+            cpu.goto_address.write(ap_entry);
         }
-    }
-
-    pub fn get_cpu(&mut self, id: usize) -> &mut CpuInfo {
-        if id == self.bsp_lapic_id as usize {
-            self.bsp_cpu()
-        } else {
-            self.ap_infos
-                .get_mut(&(id as u32))
-                .unwrap_or_else(|| panic!("CPU {} not found!", id))
-        }
-    }
-
-    pub fn bsp_cpu(&mut self) -> &mut CpuInfo {
-        &mut self.bsp
-    }
-
-    pub fn current_cpu(&mut self) -> (u32, &mut CpuInfo) {
-        let current_cpu_id = get_lapic_id();
-        (current_cpu_id, self.get_cpu(current_cpu_id as usize))
-    }
-
-    pub fn bsp_id(&self) -> u32 {
-        self.bsp_lapic_id
-    }
-
-    pub fn cpu_num(&self) -> usize {
-        self.ap_infos.len() + 1
     }
 }

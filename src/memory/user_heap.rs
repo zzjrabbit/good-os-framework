@@ -183,9 +183,11 @@ impl ProcessHeap {
         let page_cnt = (self.size + 4095) / 4096;
         let mut frame_allocator = FRAME_ALLOCATOR.lock();
         let process = self.process.as_ref().unwrap().upgrade().unwrap();
-        let process = process.read();
+        unsafe {
+            process.force_write_unlock();
+        }
+        let mut process = process.write();
 
-        let process = ref_to_mut(&*process);
         for page in 0..page_cnt {
             let page = Page::containing_address(VirtAddr::new(HEAP_START + page as u64 * 4096));
             let frame = {

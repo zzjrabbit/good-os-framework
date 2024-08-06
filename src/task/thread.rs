@@ -74,6 +74,7 @@ impl Thread {
         let thread = Self::new(Arc::downgrade(&KERNEL_PROCESS), KERNEL_PRIROITY);
         let thread = Arc::new(RwLock::new(thread));
         thread.write().state = ThreadState::Running;
+        thread.write().priority = 1;
         KERNEL_PROCESS.write().threads.push_back(thread.clone());
         add_thread(Arc::downgrade(&thread));
 
@@ -97,6 +98,7 @@ impl Thread {
 
     pub fn new_user_thread(process: WeakSharedProcess, entry_point: usize) {
         let mut thread = Self::new(process.clone(), USER_PRIROITY);
+        log::info!("New : {}", thread.id.0);
         let process = process.upgrade().unwrap();
         let mut process = process.write();
         let user_stack = UserStack::new(&mut process.page_table);
@@ -117,6 +119,10 @@ impl Thread {
 impl Drop for Thread {
     fn drop(&mut self) {
         for (index, thread) in get_threads().iter().enumerate() {
+            if let None = thread.upgrade(){
+                get_threads().remove(index);
+                break;
+            }
             if thread.upgrade().unwrap().read().id == self.id {
                 get_threads().remove(index);
                 break;

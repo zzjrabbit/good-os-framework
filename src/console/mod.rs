@@ -1,17 +1,26 @@
 use core::fmt::{self, Write};
+use alloc::boxed::Box;
 use spin::{Lazy, Mutex};
+use tty::TTYDrawTarget;
 use x86_64::instructions::interrupts;
 
 use crate::drivers::display::Display;
-use os_terminal::Terminal;
+use os_terminal::{font::{BitmapFont, TrueTypeFont}, Terminal};
 
 mod log;
+pub mod tty;
 
-pub static CONSOLE: Lazy<Mutex<Terminal<Display>>> =
-    Lazy::new(|| Mutex::new(Terminal::new(Display::new())));
+pub static CONSOLE: Lazy<Mutex<Terminal<TTYDrawTarget>>> =
+    Lazy::new(|| Mutex::new(Terminal::new(TTYDrawTarget::new(0))));
 
 pub fn init() {
+    tty::init();
     log::init();
+    CONSOLE.lock().set_font_manager(Box::new(BitmapFont{}));
+}
+
+pub fn set_font(font: &[u8]) {
+    CONSOLE.lock().set_font_manager(Box::new(TrueTypeFont::new(14.0, font)));
 }
 
 #[inline]
