@@ -60,6 +60,8 @@ fn create_wake_up_function(id: ProcessId) {
 }
 
 impl Process {
+    /// Creates a new process.
+    /// Don't use this function directly, use `new_user_process` instead.
     pub fn new(name: &str, heap_type: HeapType) -> Self {
         let page_table = create_page_table_from_kernel();
         let pid = ProcessId::new();
@@ -76,6 +78,8 @@ impl Process {
         process
     }
 
+    /// Creates a new kernel process.
+    /// Dont't use this function. There should be only one kernel process.
     pub fn new_kernel_process() -> SharedProcess {
         let process = Arc::new(RwLock::new(Self::new(
             KERNEL_PROCESS_NAME,
@@ -85,6 +89,7 @@ impl Process {
         process
     }
 
+    /// Creates a new user process.
     pub fn new_user_process(name: &str, elf_data: &'static [u8]) -> SharedProcess {
         let binary = ProcessBinary::parse(elf_data);
         let process = Arc::new(RwLock::new(Self::new(name, HeapType::User)));
@@ -98,6 +103,7 @@ impl Process {
 }
 
 impl Drop for Process {
+    /// drop the data of the process.
     fn drop(&mut self) {
         unsafe { self.page_table.clean_up(&mut *FRAME_ALLOCATOR.lock()) };
     }

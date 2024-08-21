@@ -17,6 +17,7 @@ use crate::arch::{PciArch, TraitPciArch};
 use crate::memory::{convert_physical_to_virtual, KERNEL_PAGE_TABLE};
 // PCI_DEVICE_LINKEDLIST 添加了读写锁的全局链表，里面存储了检索到的PCI设备结构体
 // PCI_ROOT_0 Segment为0的全局PciRoot
+/// This list has all the devices that were found by the PCIe driver.
 pub static PCI_DEVICE_LINKEDLIST: Lazy<PciDeviceLinkedList> =
     Lazy::new(|| PciDeviceLinkedList::new());
 pub static PCI_ROOT_0: Lazy<Option<PciRoot>> = Lazy::new(|| match PciRoot::new(0) {
@@ -27,46 +28,44 @@ pub static PCI_ROOT_0: Lazy<Option<PciRoot>> = Lazy::new(|| match PciRoot::new(0
     }
 });
 
-/// 添加了读写锁的链表，存储PCI设备结构体
+/// A list with RwLock, which has all the devices we found.
 pub struct PciDeviceLinkedList {
     list: RwLock<LinkedList<Box<dyn PciDeviceStructure>>>,
 }
 
 impl PciDeviceLinkedList {
-    /// @brief 初始化结构体
+    /// Creates a new list
     fn new() -> Self {
         PciDeviceLinkedList {
             list: RwLock::new(LinkedList::new()),
         }
     }
-    /// @brief 获取可读的linkedlist(读锁守卫)
-    /// @return RwLockReadGuard<LinkedList<Box<dyn PciDeviceStructure>>>  读锁守卫
+    
+    /// Get the read guard of the RwLock on the linked list.
     pub fn read(&self) -> RwLockReadGuard<LinkedList<Box<dyn PciDeviceStructure>>> {
         self.list.read()
     }
-    /// @brief 获取可写的linkedlist(写锁守卫)
-    /// @return RwLockWriteGuard<LinkedList<Box<dyn PciDeviceStructure>>>  写锁守卫
+
+    /// Get the write guard of the RwLock on the linked list.
     pub fn write(&self) -> RwLockWriteGuard<LinkedList<Box<dyn PciDeviceStructure>>> {
         self.list.write()
     }
-    /// @brief 获取链表中PCI结构体数目
-    /// @return usize 链表中PCI结构体数目
-    pub fn num(&self) -> usize {
+
+    /// Return how many devices are in the list.
+    pub fn len(&self) -> usize {
         let list = self.list.read();
         list.len()
     }
-    /// @brief 添加Pci设备结构体到链表中
-    pub fn add(&self, device: Box<dyn PciDeviceStructure>) {
+
+    /// Push a device to the back of the list.
+    pub fn push_back(&self, device: Box<dyn PciDeviceStructure>) {
         let mut list = self.list.write();
         list.push_back(device);
     }
 }
 
-/// @brief 在链表中寻找满足条件的PCI设备结构体并返回其可变引用
-/// @param list 链表的写锁守卫  
-/// @param class_code 寄存器值
-/// @param subclass 寄存器值，与class_code一起确定设备类型
-/// @return Vec<&'a mut Box<(dyn PciDeviceStructure)  包含链表中所有满足条件的PCI结构体的可变引用的容器
+/// Return the device structure corresponding to the class code and subclass.
+/// The device structure is mutable.
 pub fn get_pci_device_structure_mut<'a>(
     list: &'a mut RwLockWriteGuard<'_, LinkedList<Box<dyn PciDeviceStructure>>>,
     class_code: u8,
@@ -81,11 +80,7 @@ pub fn get_pci_device_structure_mut<'a>(
     }
     result
 }
-/// @brief 在链表中寻找满足条件的PCI设备结构体并返回其不可变引用
-/// @param list 链表的读锁守卫  
-/// @param class_code 寄存器值
-/// @param subclass 寄存器值，与class_code一起确定设备类型
-/// @return Vec<&'a Box<(dyn PciDeviceStructure)  包含链表中所有满足条件的PCI结构体的不可变引用的容器
+/// The same as `get_pci_device_structure_mut`, but it returns a immutable reference.
 pub fn get_pci_device_structure<'a>(
     list: &'a mut RwLockReadGuard<'_, LinkedList<Box<dyn PciDeviceStructure>>>,
     class_code: u8,
@@ -182,6 +177,7 @@ pub enum HeaderType {
     Unrecognised(u8),
 }
 /// u8到HeaderType的转换
+/// Turns a HeaderType into a u8.
 impl From<u8> for HeaderType {
     fn from(value: u8) -> Self {
         match value {
@@ -193,6 +189,7 @@ impl From<u8> for HeaderType {
     }
 }
 /// Pci可能触发的各种错误
+/// Errors that can occur when using the PCI driver.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum PciError {
     /// The device reported an invalid BAR type.
@@ -204,7 +201,7 @@ pub enum PciError {
     UnrecognisedHeaderType,
     PciDeviceStructureTransformError,
 }
-///实现PciError的Display trait，使其可以直接输出
+
 impl Display for PciError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
@@ -221,52 +218,50 @@ impl Display for PciError {
     }
 }
 
-/// trait类型Pci_Device_Structure表示pci设备，动态绑定三种具体设备类型：Pci_Device_Structure_General_Device、Pci_Device_Structure_Pci_to_Pci_Bridge、Pci_Device_Structure_Pci_to_Cardbus_Bridge
+/// This trait is implemented by `PciDeviceStructureGeneralDevice`,`PciDeviceStructurePcitoPciBridge`,`PciDeviceStructurePcitoCardbusBridge`
 pub trait PciDeviceStructure: Send + Sync {
-    /// @brief 获取设备类型
-    /// @return HeaderType 设备类型
+    /// Get the type of the device structure.
     fn header_type(&self) -> HeaderType;
-    /// @brief 当其为standard设备时返回&Pci_Device_Structure_General_Device，其余情况返回None
+    /// This function returns a `PciDeviceStructureGeneralDevice` if the device structure is a standard device, and `None` otherwise.
     fn as_standard_device(&self) -> Option<&PciDeviceStructureGeneralDevice> {
         None
     }
-    /// @brief 当其为pci to pci bridge设备时返回&Pci_Device_Structure_Pci_to_Pci_Bridge，其余情况返回None
+    /// This function returns a `PciDeviceStructurePciToPciBridge` if the device structure is a pci to pci bridge, and `None` otherwise.
     fn as_pci_to_pci_bridge_device(&self) -> Option<&PciDeviceStructurePciToPciBridge> {
         None
     }
-    /// @brief 当其为pci to cardbus bridge设备时返回&Pci_Device_Structure_Pci_to_Cardbus_Bridge，其余情况返回None
+    /// This function returns a `PciDeviceStructurePciToCardbusBridge` if the device structure is a pci to cardbus bridge, and `None` otherwise.
     fn as_pci_to_carbus_bridge_device(&self) -> Option<&PciDeviceStructurePciToCardbusBridge> {
         None
     }
-    /// @brief 获取Pci设备共有的common_header
-    /// @return 返回其不可变引用
+    /// Return a immutable reference to the common header.
     fn common_header(&self) -> &PciDeviceStructureHeader;
-    /// @brief 当其为standard设备时返回&mut Pci_Device_Structure_General_Device，其余情况返回None
+    /// Return a mutable reference to the PciDeviceStructureGeneralDevice if the device structure is a standard device, and `None` otherwise.
     fn as_standard_device_mut(&mut self) -> Option<&mut PciDeviceStructureGeneralDevice> {
         None
     }
-    /// @brief 当其为pci to pci bridge设备时返回&mut Pci_Device_Structure_Pci_to_Pci_Bridge，其余情况返回None
+    /// Return a mutable reference to the PciDeviceStructurePciToPciBridge if the device structure is a pci to pci bridge, and `None` otherwise.
     fn as_pci_to_pci_bridge_device_mut(&mut self) -> Option<&mut PciDeviceStructurePciToPciBridge> {
         None
     }
-    /// @brief 当其为pci to cardbus bridge设备时返回&mut Pci_Device_Structure_Pci_to_Cardbus_Bridge，其余情况返回None
+    /// Return a mutable reference to the PciDeviceStructurePciToCardbusBridge if the device structure is a pci to cardbus bridge, and `None` otherwise.
     fn as_pci_to_carbus_bridge_device_mut(
         &mut self,
     ) -> Option<&mut PciDeviceStructurePciToCardbusBridge> {
         None
     }
-    /// @brief 返回迭代器，遍历capabilities
+    /// Returns the iterator of the Capabilities.
     fn capabilities(&self) -> Option<CapabilityIterator> {
         None
     }
-    /// @brief 获取Status、Command寄存器的值
+    /// Gets the values of the Status and Command registers.
     fn status_command(&self) -> (Status, Command) {
         let common_header = self.common_header();
         let status = Status::from_bits_truncate(common_header.status);
         let command = Command::from_bits_truncate(common_header.command);
         (status, command)
     }
-    /// @brief 设置Command寄存器的值
+    /// Set the value of the Command register.
     fn set_command(&mut self, command: Command) {
         let common_header = self.common_header_mut();
         let command = command.bits();
@@ -277,8 +272,7 @@ pub trait PciDeviceStructure: Send + Sync {
             command as u32,
         );
     }
-    /// @brief 获取Pci设备共有的common_header
-    /// @return 返回其可变引用
+    /// Returns the mutable reference to the common header.
     fn common_header_mut(&mut self) -> &mut PciDeviceStructureHeader;
     /// @brief 读取standard设备的bar寄存器，映射后将结果加入结构体的standard_device_bar变量
     /// @return 只有standard设备才返回成功或者错误，其余返回None
@@ -650,7 +644,7 @@ fn pci_read_header(
             let box_general_device = Box::new(general_device);
             let box_general_device_clone = box_general_device.clone();
             if add_to_list {
-                PCI_DEVICE_LINKEDLIST.add(box_general_device);
+                PCI_DEVICE_LINKEDLIST.push_back(box_general_device);
             }
             Ok(box_general_device_clone)
         }
@@ -659,7 +653,7 @@ fn pci_read_header(
             let box_pci_to_pci_bridge = Box::new(pci_to_pci_bridge);
             let box_pci_to_pci_bridge_clone = box_pci_to_pci_bridge.clone();
             if add_to_list {
-                PCI_DEVICE_LINKEDLIST.add(box_pci_to_pci_bridge);
+                PCI_DEVICE_LINKEDLIST.push_back(box_pci_to_pci_bridge);
             }
             Ok(box_pci_to_pci_bridge_clone)
         }
@@ -669,7 +663,7 @@ fn pci_read_header(
             let box_pci_cardbus_bridge = Box::new(pci_cardbus_bridge);
             let box_pci_cardbus_bridge_clone = box_pci_cardbus_bridge.clone();
             if add_to_list {
-                PCI_DEVICE_LINKEDLIST.add(box_pci_cardbus_bridge);
+                PCI_DEVICE_LINKEDLIST.push_back(box_pci_cardbus_bridge);
             }
             Ok(box_pci_cardbus_bridge_clone)
         }
@@ -974,7 +968,7 @@ pub fn init() {
     }
     info!(
         "Total pci device and function num = {}",
-        PCI_DEVICE_LINKEDLIST.num()
+        PCI_DEVICE_LINKEDLIST.len()
     );
     let list = PCI_DEVICE_LINKEDLIST.read();
     for box_pci_device in list.iter() {

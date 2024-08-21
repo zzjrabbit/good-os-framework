@@ -54,6 +54,8 @@ pub const KERNEL_PRIROITY: isize = 10;
 pub const USER_PRIROITY: isize = 20;
 
 impl Thread {
+    /// Creates a new thread.
+    /// Don't call this function directly, use `Thread::new_init_thread`,`Thread::new_user_thread` or `Thread::new_kernel_thread` instead.
     pub fn new(process: WeakSharedProcess, priority: isize) -> Self {
         let thread = Thread {
             id: ThreadId::new(),
@@ -70,6 +72,7 @@ impl Thread {
         thread
     }
 
+    /// Creates a new initial thread.
     pub fn new_init_thread() -> SharedThread {
         let thread = Self::new(Arc::downgrade(&KERNEL_PROCESS), KERNEL_PRIROITY);
         let thread = Arc::new(RwLock::new(thread));
@@ -81,6 +84,7 @@ impl Thread {
         thread
     }
 
+    /// Creates a new kernel thread.
     pub fn new_kernel_thread(function: fn()) {
         let mut thread = Self::new(Arc::downgrade(&KERNEL_PROCESS), KERNEL_PRIROITY);
 
@@ -96,6 +100,7 @@ impl Thread {
         KERNEL_PROCESS.write().threads.push_back(thread);
     }
 
+    /// Creates a new user thread.
     pub fn new_user_thread(process: WeakSharedProcess, entry_point: usize) {
         let mut thread = Self::new(process.clone(), USER_PRIROITY);
         log::info!("New : {}", thread.id.0);

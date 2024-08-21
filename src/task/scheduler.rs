@@ -34,10 +34,14 @@ pub fn init() {
     log::info!("Scheduler initialized!");
 }
 
+/// Gets the process by the process ID given.
 pub fn get_process(pid: ProcessId) -> Option<SharedProcess> {
     PROCESSES.read().get(&pid).cloned()
 }
 
+/// Adds a new process.
+/// You don't need to call this function directly.
+/// The `new_user_process` function calls this function.
 #[inline]
 pub fn add_process(process: SharedProcess) {
     interrupts::without_interrupts(|| {
@@ -45,6 +49,9 @@ pub fn add_process(process: SharedProcess) {
     });
 }
 
+/// Adds a new thread.
+/// You don't need to call this function directly.
+/// The `Thread::new_user_thread` and `Thread::new_kernel_thread` function calls this function.
 #[inline]
 pub fn add_thread(thread: WeakSharedThread) {
     interrupts::without_interrupts(|| {
@@ -164,10 +171,12 @@ impl Scheduler {
     }
 }
 
+/// DO NOT USE THIS FUNCTION!
 pub fn get_threads() -> MutexGuard<'static, Vec<WeakSharedThread>> {
     THREADS.lock()
 }
 
+/// exits the current process.
 pub fn exit() {
     let schedulers = SCHEDULERS.lock();
     let current_scheduler_option = schedulers.get(&get_lapic_id());

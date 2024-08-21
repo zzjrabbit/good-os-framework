@@ -40,6 +40,7 @@ impl Hpet {
         }
     }
 
+    /// Gets the clock speed of the HPET.
     pub fn clock_speed(&self) -> u32 {
         unsafe {
             let base_addr = *self.base_addr.get();
@@ -48,6 +49,7 @@ impl Hpet {
         }
     }
 
+    /// Gets the timers count of the HPET.
     pub fn timers_count(&self) -> u32 {
         unsafe {
             let base_addr = *self.base_addr.get();
@@ -56,6 +58,7 @@ impl Hpet {
         }
     }
 
+    /// Enable the HPET counter.
     pub fn enable_counter(&self) {
         unsafe {
             let configuration_addr = *self.base_addr.get() + 0x10;
@@ -64,6 +67,7 @@ impl Hpet {
         }
     }
 
+    /// Read the current value of the HPET counter.
     pub fn get_counter(&self) -> u64 {
         unsafe {
             let counter_l_addr = *self.base_addr.get() + 0xf0;
@@ -79,6 +83,7 @@ impl Hpet {
         }
     }
 
+    /// Get the time
     #[inline]
     pub fn get_time_elapsed(&self) -> u64 {
         self.get_counter() * (self.clock_speed() as u64 / 1_000_000)

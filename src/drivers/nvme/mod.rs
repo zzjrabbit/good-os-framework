@@ -74,6 +74,7 @@ pub struct NvmeStats {
     pub submissions: u64,
 }
 
+/// Reads a block from the NVMe driver at block block_id
 pub fn read_block(hd: usize, block_id: u64, buf: &mut [u8]) {
     let dma: Dma<u8> = Dma::allocate(buf.len()).expect("Cannot allocate frame");
     let mut cons = NVME_CONS.lock();
@@ -82,6 +83,7 @@ pub fn read_block(hd: usize, block_id: u64, buf: &mut [u8]) {
     unsafe { buf.as_mut_ptr().copy_from(dma.virt, 512) };
 }
 
+/// Writes a block to the NVMe driver at block block_id
 pub fn write_block(hd: usize, block_id: u64, buf: &[u8]) {
     let dma: Dma<u8> = Dma::allocate(buf.len()).expect("Cannot allocate frame");
     unsafe { dma.virt.copy_from(buf.as_ptr(), 512) };
@@ -90,11 +92,13 @@ pub fn write_block(hd: usize, block_id: u64, buf: &[u8]) {
     nvme.write(&dma, block_id).expect("Cannot write");
 }
 
+/// Gets the number of NVMe drives
 pub fn get_hd_num() -> usize {
     let cons = NVME_CONS.lock();
     cons.len()
 }
 
+/// Get the driver size of the NVMe driver.
 pub fn get_hd_size(hd: usize) -> Option<usize> {
     let cons = NVME_SIZES.lock();
     cons.get(&hd).copied()

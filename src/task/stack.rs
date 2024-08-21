@@ -7,6 +7,7 @@ const KERNEL_STACK_SIZE: usize = 16 * 1024;
 const USER_STACK_END: usize = 0x0000_7fff_feff_f000;
 const USER_STACK_SIZE: usize = 64 * 1024;
 
+/// You don't have to use this struct.
 pub struct KernelStack(Box<[u8]>);
 
 impl KernelStack {
@@ -24,6 +25,7 @@ impl Drop for KernelStack {
     }
 }
 
+/// You don't have to use this struct.
 pub struct UserStack {
     pub start_address: VirtAddr,
     pub end_address: VirtAddr,

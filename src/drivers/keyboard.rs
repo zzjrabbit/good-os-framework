@@ -11,10 +11,12 @@ pub fn add_scancode(scancode: u8) {
     }
 }
 
+/// Return the scan code of the keyboard buffer, returns None is the buffer is empty.
 pub fn get_scancode() -> Option<u8> {
     SCANCODE_QUEUE.pop()
 }
 
+/// Return whether the keyboard buffer is empty.
 pub fn has_scancode() -> bool {
     !SCANCODE_QUEUE.is_empty()
 }

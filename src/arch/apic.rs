@@ -37,13 +37,14 @@ pub fn end_of_interrupt() {
     }
 }
 
-pub fn get_lapic_addr() -> VirtAddr {
+fn get_lapic_addr() -> VirtAddr {
     let acpi = super::acpi::ACPI.try_get().unwrap();
     let physical_address = PhysAddr::new(acpi.apic_info.local_apic_address as u64);
     let virtual_address = convert_physical_to_virtual(physical_address);
     virtual_address
 }
 
+/// Gets the local APIC.
 pub fn get_lapic() -> LocalApic {
     LocalApicBuilder::new()
         .timer_vector(InterruptIndex::Timer as usize)
@@ -56,6 +57,7 @@ pub fn get_lapic() -> LocalApic {
         .unwrap_or_else(|err| panic!("Failed to build local APIC: {:#?}", err))
 }
 
+/// Returns the local APIC ID of the current CPU.
 pub fn get_lapic_id() -> u32 {
     unsafe {
         LocalApicBuilder::new()

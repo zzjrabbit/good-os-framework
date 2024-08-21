@@ -10,6 +10,7 @@ use super::{
     convert_physical_to_virtual, BitmapFrameAllocator, FRAME_ALLOCATOR, PHYSICAL_MEMORY_OFFSET,
 };
 
+/// The page table.
 #[derive(Debug)]
 pub struct GeneralPageTable {
     pub inner: OffsetPageTable<'static>,
@@ -17,6 +18,7 @@ pub struct GeneralPageTable {
 }
 
 impl GeneralPageTable {
+    /// Switches to the page table.
     pub unsafe fn switch(&self) {
         let page_table_frame = {
             let physical_address = self.physical_address;
@@ -27,6 +29,7 @@ impl GeneralPageTable {
         }
     }
 
+    /// Creates a new page table from the specified physical address.
     pub unsafe fn new_from_address(
         frame_allocator: &mut BitmapFrameAllocator,
         physical_address: PhysAddr,
@@ -40,6 +43,7 @@ impl GeneralPageTable {
         new_page_table
     }
 
+    /// Returns the current page table.
     pub unsafe fn ref_from_current() -> Self {
         let physical_address = Cr3::read().0.start_address();
 
@@ -54,6 +58,7 @@ impl GeneralPageTable {
         }
     }
 
+    /// Creates a new page table.
     unsafe fn new(frame_allocator: &mut BitmapFrameAllocator) -> Self {
         let page_table_address: Option<PhysFrame<Size4KiB>> =
             BitmapFrameAllocator::allocate_frame(frame_allocator);
@@ -73,6 +78,7 @@ impl GeneralPageTable {
         }
     }
 
+    /// Creates a new page table from the kernel page table.
     unsafe fn new_from_recursion(
         frame_allocator: &mut BitmapFrameAllocator,
         source_page_table: &PageTable,
@@ -103,6 +109,7 @@ impl GeneralPageTable {
         }
     }
 
+    /// Maps a frame to a page with the specified flags.
     pub unsafe fn map_to_with_table_flags_general(
         &mut self,
         page: Page<Size4KiB>,
@@ -142,6 +149,7 @@ impl GeneralPageTable {
 }
 
 impl Mapper<Size4KiB> for GeneralPageTable {
+    /// Maps the frame to the page with the specified flags.
     #[inline]
     unsafe fn map_to_with_table_flags<A>(
         &mut self,
@@ -160,6 +168,7 @@ impl Mapper<Size4KiB> for GeneralPageTable {
         }
     }
 
+    /// unmaps a page.
     #[inline]
     fn unmap(
         &mut self,
@@ -168,6 +177,7 @@ impl Mapper<Size4KiB> for GeneralPageTable {
         self.inner.unmap(page)
     }
 
+    /// updates the flags of the page table.
     #[inline]
     unsafe fn update_flags(
         &mut self,
@@ -177,6 +187,7 @@ impl Mapper<Size4KiB> for GeneralPageTable {
         self.inner.update_flags(page, flags)
     }
 
+    /// set the flags of the p4 entry.
     #[inline]
     unsafe fn set_flags_p4_entry(
         &mut self,
@@ -186,6 +197,7 @@ impl Mapper<Size4KiB> for GeneralPageTable {
         self.inner.set_flags_p4_entry(page, flags)
     }
 
+    /// sets the flags of the p3 entry.
     #[inline]
     unsafe fn set_flags_p3_entry(
         &mut self,
@@ -195,6 +207,7 @@ impl Mapper<Size4KiB> for GeneralPageTable {
         self.inner.set_flags_p3_entry(page, flags)
     }
 
+    /// sets the flags of the p2 entry.
     #[inline]
     unsafe fn set_flags_p2_entry(
         &mut self,
@@ -204,6 +217,7 @@ impl Mapper<Size4KiB> for GeneralPageTable {
         self.inner.set_flags_p2_entry(page, flags)
     }
 
+    /// translate a page to a physical frame.
     #[inline]
     fn translate_page(&self, page: Page<Size4KiB>) -> Result<PhysFrame<Size4KiB>, TranslateError> {
         self.inner.translate_page(page)
@@ -211,6 +225,7 @@ impl Mapper<Size4KiB> for GeneralPageTable {
 }
 
 impl Translate for GeneralPageTable {
+    /// translate a virtual page to a physical address.
     #[inline]
     fn translate(&self, addr: VirtAddr) -> TranslateResult {
         self.inner.translate(addr)
@@ -218,6 +233,7 @@ impl Translate for GeneralPageTable {
 }
 
 impl CleanUp for GeneralPageTable {
+    /// Unmap all the pages in the page table.
     #[inline]
     unsafe fn clean_up<D>(&mut self, frame_deallocator: &mut D)
     where
@@ -226,6 +242,7 @@ impl CleanUp for GeneralPageTable {
         self.inner.clean_up(frame_deallocator)
     }
 
+    /// Unmap all the pages in the virtual address range given.
     #[inline]
     unsafe fn clean_up_addr_range<D>(
         &mut self,
@@ -239,6 +256,7 @@ impl CleanUp for GeneralPageTable {
 }
 
 impl GeneralPageTable {
+    /// Read data from the virtual address on the page table.
     pub fn read(&self, address: VirtAddr, len: usize, buffer: &mut [u8]) -> Result<(), ()> {
         for offset in 0..len {
             let src_address = address + offset as u64;
@@ -254,6 +272,7 @@ impl GeneralPageTable {
         Ok(())
     }
 
+    /// Write data to the virtual address on the page table.
     pub fn write(&self, buffer: &[u8], address: VirtAddr) -> Result<(), ()> {
         for (offset, &byte) in buffer.iter().enumerate() {
             let target_address = address + offset as u64;
@@ -267,6 +286,8 @@ impl GeneralPageTable {
     }
 }
 
+/// In syscall, we don't need to worry about page tables, because we are using the user page table.
+/// Use this function instead of `write` in syscall.
 pub fn write_for_syscall<T: Clone>(addr: VirtAddr, buf: &[T]) {
     let reffer: *mut T = addr.as_mut_ptr();
     for (idx, byte) in buf.iter().enumerate() {

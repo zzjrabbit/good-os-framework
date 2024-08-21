@@ -3,11 +3,13 @@ use spin::{Lazy, Mutex};
 use uart_16550::SerialPort;
 use x86_64::instructions::interrupts;
 
+/// Print something to the serial port.
 #[macro_export]
 macro_rules! serial_print {
     ($($arg: tt)*) => ($crate::drivers::serial::_print(format_args!($($arg)*)));
 }
 
+/// Print something to the serial port, appending a newline.
 #[macro_export]
 macro_rules! serial_println {
     () => ($crate::serial_print!("\n"));

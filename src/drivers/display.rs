@@ -25,6 +25,7 @@ pub struct Display {
 }
 
 impl Display {
+    /// Creates a new `Display`
     pub fn new() -> Self {
         let response = FRAMEBUFFER_REQUEST.get_response().unwrap();
         let frame_buffer = response.framebuffers().next().take().unwrap();
@@ -61,6 +62,7 @@ impl Display {
         }
     }
 
+    /// Returns a mutable reference to the frame buffer which Limine gives to the kernel.
     pub fn get_frame_buffer(&self) -> &'static mut [u8] {
         unsafe { from_raw_parts_mut(self.buffer.as_ptr() as *mut u8, self.buffer.len()) }
     }

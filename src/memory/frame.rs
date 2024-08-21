@@ -75,6 +75,7 @@ impl BitmapFrameAllocator {
         }
     }
 
+    /// Allocates some frames.
     pub fn allocate_frames(&mut self, cnt: usize) -> Option<u64> {
         //log::info!("allocate_frames cnt: {}", cnt);
         if cnt > self.usable_frames {

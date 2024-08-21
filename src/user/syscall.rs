@@ -88,6 +88,7 @@ fn tmp_syscall_handler(
     0
 }
 
+/// The syscall handler type
 pub type SyscallHandlerFn = fn(
     idx: usize,
     arg1: usize,
@@ -100,6 +101,7 @@ pub type SyscallHandlerFn = fn(
 
 static SYSCALL_HANDLER: Mutex<SyscallHandlerFn> = Mutex::new(tmp_syscall_handler);
 
+/// Sets the syscall handler.
 pub fn regist_syscall_handler(handler: SyscallHandlerFn) {
     *SYSCALL_HANDLER.lock() = handler;
 }

@@ -61,6 +61,7 @@ pub static TTYS: Mutex<Vec<Arc<RwLock<TTY>>>> = Mutex::new(Vec::new());
 pub static CURRENT_TTY: AtomicUsize = AtomicUsize::new(0);
 pub static INIT: AtomicBool = AtomicBool::new(false);
 
+/// Switches to the specified TTY.
 pub fn switch_to(tty: usize) {
     x86_64::instructions::interrupts::disable();
     let init = INIT.load(Ordering::SeqCst);
@@ -183,6 +184,7 @@ pub fn init() {
     INIT.store(true, Ordering::SeqCst);
 }
 
+/// Gets the current TTY.
 pub fn get_tty(id: usize) -> Arc<RwLock<TTY>> {
     return TTYS.lock()[id].clone();
 }

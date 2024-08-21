@@ -31,6 +31,7 @@ pub struct FpState {
 }
 
 impl FpState {
+    /// Creates a new FPU context.
     pub fn new() -> Self {
         assert!(core::mem::size_of::<Self>() == 512);
         Self {
@@ -43,12 +44,14 @@ impl FpState {
         }
     }
 
+    /// Saves the FPU context to the provided buffer.
     pub fn save(&mut self) {
         unsafe {
             core::arch::x86_64::_fxsave64(self as *mut FpState as *mut u8);
         }
     }
 
+    /// Restores the FPU context from the provided buffer.
     pub fn restore(&self) {
         unsafe {
             core::arch::x86_64::_fxrstor64(self as *const FpState as *const u8);

@@ -8,6 +8,7 @@ use x86_64::VirtAddr;
 use super::BitmapFrameAllocator;
 use super::GeneralPageTable;
 
+/// The memory manager.
 pub struct MemoryManager<S: PageSize = Size4KiB> {
     size: PhantomData<S>,
 }
@@ -39,6 +40,7 @@ impl<S: PageSize> MemoryManager<S> {
         Ok(())
     }
 
+    /// Maps a frame to a page.
     pub fn map_frame_to_page(
         frame: PhysFrame<S>,
         page: Page<S>,

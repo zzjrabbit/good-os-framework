@@ -37,6 +37,7 @@ impl Mapper for XHCIMapper {
     fn unmap(&mut self, _virt_start: usize, _bytes: usize) {}
 }
 
+/// Returns the XHCI registers.
 pub fn get_xhci(mmio_base: usize) -> Registers<XHCIMapper> {
     unsafe { Registers::new(mmio_base, XHCIMapper) }
 }

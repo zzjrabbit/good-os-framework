@@ -9,6 +9,8 @@ pub use process::Process;
 pub use scheduler::init;
 pub use thread::Thread;
 
+/// Schedules the next task.
+/// It uses a interrupt.
 pub fn schedule() {
     unsafe {
         //log::info!("GO");

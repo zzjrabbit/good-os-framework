@@ -1,5 +1,6 @@
 use bit_field::BitField;
 
+/// A simple Bitmap implementation.
 pub struct Bitmap {
     inner: &'static mut [u8],
 }

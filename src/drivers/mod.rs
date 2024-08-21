@@ -17,6 +17,7 @@ pub fn init() {
     mouse::init();
 }
 
+/// Allocate memory for the DMA drivers, `cnt` is the number of physical memory frames you need.
 pub fn alloc_for_dma(cnt: usize) -> (PhysAddr, VirtAddr) {
     let phys = FRAME_ALLOCATOR.lock().allocate_frames(cnt).unwrap();
     let phys = PhysAddr::new(phys);
@@ -24,6 +25,7 @@ pub fn alloc_for_dma(cnt: usize) -> (PhysAddr, VirtAddr) {
     (phys, virt)
 }
 
+/// deallocates the physical memory.
 pub fn dealloc_for_dma(virt_addr: VirtAddr, _cnt: usize) {
     let phys = crate::memory::convert_virtual_to_physical(virt_addr);
     unsafe {

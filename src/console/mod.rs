@@ -19,8 +19,9 @@ pub fn init() {
     CONSOLE.lock().set_font_manager(Box::new(BitmapFont{}));
 }
 
-pub fn set_font(font: &[u8]) {
-    CONSOLE.lock().set_font_manager(Box::new(TrueTypeFont::new(14.0, font)));
+/// Sets the font of the terminal on TTY0.
+pub fn set_font(size: f32,font: &'static [u8]) {
+    CONSOLE.lock().set_font_manager(Box::new(TrueTypeFont::new(size, font)));
 }
 
 #[inline]
