@@ -5,13 +5,14 @@
 */
 
 use crate::{memory::FRAME_ALLOCATOR, ref_to_mut, task::Process};
-use alloc::{sync::Weak, vec::Vec};
-use core::alloc::Layout;
-use spin::{Mutex, RwLock};
+use alloc::sync::Weak;
+use core::{alloc::{Allocator, Layout}, ptr::NonNull};
+use spin::RwLock;
 use x86_64::{
     structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags},
     VirtAddr,
 };
+use talc::*;
 
 pub enum HeapType {
     Kernel,
@@ -19,54 +20,13 @@ pub enum HeapType {
 }
 
 pub const HEAP_START: u64 = 20 * 1024 * 1024 * 1024 * 1024; // 20TB(用户程序空间18TB~20TB)
-pub const USER_HEAP_INIT_SIZE: usize = 32 * 1024; // 32KB
-
-pub struct Heap(Mutex<Vec<(u64, usize)>>);
-
-impl Heap {
-    pub fn new() -> Self {
-        Self(Mutex::new(Vec::new()))
-    }
-
-    pub fn init(&self, start: usize, size: usize) {
-        let mut list = self.0.lock();
-        list.push((start as u64, size));
-    }
-
-    pub fn add(&self, start: usize, size: usize) {
-        let mut list = self.0.lock();
-        list.push((start as u64, size));
-    }
-
-    pub fn alloc(&self, layout: Layout) -> Option<u64> {
-        let mut list = self.0.lock();
-        for idx in 0..list.len() {
-            let (start, size) = list[idx];
-            if start % layout.align() as u64 == 0 && size > layout.size() {
-                let ptr = start as *mut u8;
-                list[idx].0 += layout.size() as u64;
-                list[idx].1 -= layout.size();
-                return Some(ptr as u64);
-            } else if start % layout.align() as u64 == 0 && size == layout.size() {
-                let ptr = start as *mut u8;
-                list.remove(idx);
-                return Some(ptr as u64);
-            }
-        }
-        None
-    }
-
-    pub fn dealloc(&self, ptr: u64, layout: Layout) {
-        let mut list = self.0.lock();
-        list.push((ptr as u64, layout.size()));
-    }
-}
+pub const USER_HEAP_INIT_SIZE: usize = 128 * 1024; // 128KB
 
 pub struct ProcessHeap {
     heap_type: HeapType,
     size: usize,
     usable_size: usize,
-    allocator: Heap,
+    allocator: Talck<spin::Mutex<()>, ClaimOnOom>,
     process: Option<Weak<RwLock<Process>>>,
 }
 
@@ -76,10 +36,9 @@ impl ProcessHeap {
             HeapType::Kernel => 0,
             HeapType::User => USER_HEAP_INIT_SIZE,
         };
-        let allocator = Heap::new();
-        if size > 0 {
-            allocator.init(HEAP_START as usize, size);
-        }
+        let allocator = Talck::new(Talc::new(unsafe {
+            ClaimOnOom::new(Span::from_base_size(HEAP_START as *mut u8, size))
+        }));
 
         Self {
             heap_type,
@@ -110,6 +69,7 @@ impl ProcessHeap {
                             .flush();
                     }
                 }
+                
             }
 
             _ => {}
@@ -118,7 +78,11 @@ impl ProcessHeap {
 
     fn sbrk(&mut self, size: usize) {
         let page_cnt = (size + 4095) / 4096;
-        self.allocator.add(HEAP_START as usize + self.size, size);
+        unsafe {
+            let old = Span::from_base_size(HEAP_START as *mut u8, self.size);
+            let new = old.extend(0, size);
+            self.allocator.lock().extend(old, new);
+        };
         let mut frame_allocator = FRAME_ALLOCATOR.lock();
         let process = self.process.as_ref().unwrap().upgrade().unwrap();
         let process = process.read();
@@ -159,14 +123,14 @@ impl ProcessHeap {
             }
             _ => {}
         }
-        if let Some(ptr) = self.allocator.alloc(layout) {
+        if let Ok(ptr) = self.allocator.allocate(layout) {
             self.usable_size -= layout.size();
-            Some(ptr as u64)
+            Some(ptr.addr().get() as u64)
         } else {
             self.sbrk(layout.size() * 2);
-            let ptr = self.allocator.alloc(layout).unwrap();
+            let ptr = self.allocator.allocate(layout).unwrap();
             self.usable_size -= layout.size();
-            Some(ptr as u64)
+            Some(ptr.addr().get() as u64)
         }
     }
 
@@ -175,7 +139,9 @@ impl ProcessHeap {
             HeapType::Kernel => panic!("Don't use process heaps in kernel mode!"),
             _ => {}
         }
-        self.allocator.dealloc(ptr, layout);
+        unsafe {
+            self.allocator.deallocate(NonNull::new(ptr as *mut u8).unwrap(), layout);
+        }
         self.usable_size += layout.size();
     }
 
@@ -205,7 +171,6 @@ impl ProcessHeap {
                 frame_allocator.deallocate_frame(frame);
             }
         }
-        self.allocator.0.lock().clear();
         self.size = 0;
         self.usable_size = 0;
     }

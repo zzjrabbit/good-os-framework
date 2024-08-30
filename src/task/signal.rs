@@ -2,8 +2,6 @@ use alloc::{vec::Vec, vec};
 
 use crate::data::bitmap::Bitmap;
 
-use super::process::ProcessId;
-
 /// the signal structure.
 #[derive(Debug, Clone, Copy)]
 pub struct Signal {
@@ -17,18 +15,14 @@ pub struct SignalManager {
     signal_bitmap: Bitmap, 
     signals: Vec<Signal>,
     waiting_for: usize,
-    wake_up_process: fn(ProcessId),
-    pid: ProcessId,
 }
 
 impl SignalManager {
-    pub fn new(signal_type_num: usize, wake_up_process_fn: fn(ProcessId), pid: ProcessId) -> Self {
+    pub fn new(signal_type_num: usize) -> Self {
         Self {
             signal_bitmap: Bitmap::new(vec![0;signal_type_num].leak()),
             signals: Vec::new(),
             waiting_for: 0,
-            wake_up_process: wake_up_process_fn,
-            pid,
         }
     }
 
@@ -38,15 +32,17 @@ impl SignalManager {
     }
 
     /// Registers a new signal and wakes up the process if it is waiting for the signal.
-    pub fn register_signal(&mut self, signal_type: usize, signal: Signal) {
+    pub fn register_signal(&mut self, signal_type: usize, signal: Signal) -> bool {
         assert_ne!(signal_type, 0);
         self.signal_bitmap.set(signal_type, true);
         self.signals.push(signal);
 
         if signal_type == self.waiting_for {
-            self.wake_up_process.call((self.pid,));
             self.waiting_for = 0;
+            return true;
         }
+
+        return false;
     }
 
     /// Starts to wait for a signal.

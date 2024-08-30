@@ -4,6 +4,10 @@
 #![feature(allocator_api)]
 #![feature(naked_functions)]
 #![feature(fn_traits)]
+#![feature(const_for)]
+#![feature(const_trait_impl)]
+#![feature(const_mut_refs)]
+#![feature(strict_provenance)]
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -22,13 +26,13 @@ static START_SCHEDULE: AtomicBool = AtomicBool::new(false);
 pub fn init_framework() {
     memory::init();
     console::init();
-    arch::smp::CPUS.lock().init_bsp();
+    arch::smp::CPUS.write().init_bsp();
     arch::interrupts::IDT.load();
     arch::acpi::init();
     drivers::hpet::init();
 
     #[cfg(feature = "smp")]
-    arch::smp::CPUS.lock().init_ap();
+    arch::smp::CPUS.write().init_ap();
 
     
 

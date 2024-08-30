@@ -6,11 +6,9 @@ use spin::RwLock;
 
 use super::context::Context;
 use super::process::WeakSharedProcess;
-use super::scheduler::add_thread;
-use super::scheduler::get_threads;
-use super::scheduler::KERNEL_PROCESS;
+use super::process::KERNEL_PROCESS;
+use super::scheduler::SCHEDULER;
 use super::stack::{KernelStack, UserStack};
-use crate::arch::apic::get_lapic_id;
 use crate::arch::gdt::Selectors;
 use crate::drivers::fpu::FpState;
 use crate::memory::KERNEL_PAGE_TABLE;
@@ -37,12 +35,18 @@ pub enum ThreadState {
     Terminated,
 }
 
+impl ThreadState {
+    pub fn is_active(&self) -> bool {
+        match self {
+            ThreadState::Running | ThreadState::Ready => true,
+            _ => false,
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub struct Thread {
     pub id: ThreadId,
-    pub cpu_id: usize,
-    pub priority: isize,
-    pub vruntime: isize,
     pub state: ThreadState,
     pub kernel_stack: KernelStack,
     pub context: Context,
@@ -50,18 +54,12 @@ pub struct Thread {
     pub fpu_context: FpState,
 }
 
-pub const KERNEL_PRIROITY: isize = 10;
-pub const USER_PRIROITY: isize = 20;
-
 impl Thread {
     /// Creates a new thread.
     /// Don't call this function directly, use `Thread::new_init_thread`,`Thread::new_user_thread` or `Thread::new_kernel_thread` instead.
-    pub fn new(process: WeakSharedProcess, priority: isize) -> Self {
+    pub fn new(process: WeakSharedProcess) -> Self {
         let thread = Thread {
             id: ThreadId::new(),
-            cpu_id: get_lapic_id() as usize,
-            priority,
-            vruntime: -1,
             state: ThreadState::Ready,
             context: Context::default(),
             kernel_stack: KernelStack::new(),
@@ -73,20 +71,18 @@ impl Thread {
     }
 
     /// Creates a new initial thread.
-    pub fn new_init_thread() -> SharedThread {
-        let thread = Self::new(Arc::downgrade(&KERNEL_PROCESS), KERNEL_PRIROITY);
+    pub fn get_init_thread() -> WeakSharedThread {
+        let thread = Self::new(Arc::downgrade(&KERNEL_PROCESS));
         let thread = Arc::new(RwLock::new(thread));
-        thread.write().state = ThreadState::Running;
-        thread.write().priority = 1;
         KERNEL_PROCESS.write().threads.push_back(thread.clone());
-        add_thread(Arc::downgrade(&thread));
-
-        thread
+        //SCHEDULER.lock().add(Arc::downgrade(&thread));
+        Arc::downgrade(&thread)
     }
+
 
     /// Creates a new kernel thread.
     pub fn new_kernel_thread(function: fn()) {
-        let mut thread = Self::new(Arc::downgrade(&KERNEL_PROCESS), KERNEL_PRIROITY);
+        let mut thread = Self::new(Arc::downgrade(&KERNEL_PROCESS));
 
         thread.context.init(
             function as usize,
@@ -95,15 +91,20 @@ impl Thread {
             Selectors::get_kernel_segments(),
         );
 
+        
+
         let thread = Arc::new(RwLock::new(thread));
-        add_thread(Arc::downgrade(&thread));
+        
+        
+        SCHEDULER.lock().add(Arc::downgrade(&thread));
         KERNEL_PROCESS.write().threads.push_back(thread);
+        
     }
 
     /// Creates a new user thread.
     pub fn new_user_thread(process: WeakSharedProcess, entry_point: usize) {
-        let mut thread = Self::new(process.clone(), USER_PRIROITY);
-        log::info!("New : {}", thread.id.0);
+        let mut thread = Self::new(process.clone());
+        //log::info!("New : {}", thread.id.0);
         let process = process.upgrade().unwrap();
         let mut process = process.write();
         let user_stack = UserStack::new(&mut process.page_table);
@@ -116,22 +117,9 @@ impl Thread {
         );
 
         let thread = Arc::new(RwLock::new(thread));
-        add_thread(Arc::downgrade(&thread));
+        SCHEDULER.lock().add(Arc::downgrade(&thread));
         process.threads.push_back(thread.clone());
     }
 }
 
-impl Drop for Thread {
-    fn drop(&mut self) {
-        for (index, thread) in get_threads().iter().enumerate() {
-            if let None = thread.upgrade(){
-                get_threads().remove(index);
-                break;
-            }
-            if thread.upgrade().unwrap().read().id == self.id {
-                get_threads().remove(index);
-                break;
-            }
-        }
-    }
-}
+

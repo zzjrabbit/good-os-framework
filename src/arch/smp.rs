@@ -5,27 +5,27 @@ use alloc::collections::BTreeMap;
 use limine::request::SmpRequest;
 use limine::response::SmpResponse;
 use limine::smp::Cpu;
-use spin::{Lazy, Mutex};
+use spin::{Lazy, RwLock};
 
 use super::apic::calibrate_timer;
 use super::gdt::CpuInfo;
 use super::interrupts::IDT;
 use crate::arch::apic::get_lapic;
 use crate::drivers::hpet::HPET_INIT;
-use crate::task::scheduler::{Scheduler, SCHEDULERS, SCHEDULER_INIT};
+use crate::task::scheduler::SCHEDULER_INIT;
 use crate::{user, START_SCHEDULE};
 
 #[used]
 #[link_section = ".requests"]
 static SMP_REQUEST: SmpRequest = SmpRequest::new();
 
-pub static CPUS: Lazy<Mutex<Cpus>> = Lazy::new(|| Mutex::new(Cpus::new()));
+pub static CPUS: Lazy<RwLock<Cpus>> = Lazy::new(|| RwLock::new(Cpus::new()));
 pub static BSP_LAPIC_ID: Lazy<u32> = Lazy::new(|| SMP_RESPONSE.bsp_lapic_id());
 static SMP_RESPONSE: Lazy<&SmpResponse> = Lazy::new(|| SMP_REQUEST.get_response().unwrap());
 
 unsafe extern "C" fn ap_entry(smp_info: &Cpu) -> ! {
 
-    CPUS.lock().get(smp_info.lapic_id).load();
+    CPUS.read().get(smp_info.lapic_id).load();
     IDT.load();
 
     while !HPET_INIT.load(Ordering::SeqCst) {}
@@ -36,9 +36,6 @@ unsafe extern "C" fn ap_entry(smp_info: &Cpu) -> ! {
     lapic.enable_timer();
 
     while !SCHEDULER_INIT.load(Ordering::SeqCst) {}
-    SCHEDULERS
-        .lock()
-        .insert(smp_info.lapic_id, Scheduler::new());
 
     user::init();
 

@@ -4,22 +4,23 @@ use alloc::sync::{Arc, Weak};
 use core::fmt::Debug;
 use core::sync::atomic::{AtomicU64, Ordering};
 use object::{File, Object, ObjectSegment};
-use spin::RwLock;
+use spin::{Lazy, RwLock};
 use x86_64::instructions::interrupts;
 use x86_64::structures::paging::mapper::CleanUp;
 use x86_64::structures::paging::PageTableFlags;
 use x86_64::VirtAddr;
 
-use super::scheduler::get_process;
 use super::signal::SignalManager;
-use super::thread::{SharedThread, Thread, ThreadState};
+use super::thread::{SharedThread, Thread};
 use crate::memory::MemoryManager;
 use crate::memory::{create_page_table_from_kernel, HeapType, ProcessHeap};
 use crate::memory::{GeneralPageTable, FRAME_ALLOCATOR};
-use crate::task::scheduler::add_process;
 
 pub(super) type SharedProcess = Arc<RwLock<Process>>;
 pub(super) type WeakSharedProcess = Weak<RwLock<Process>>;
+
+static PROCESSES: RwLock<VecDeque<SharedProcess>> = RwLock::new(VecDeque::new());
+pub static KERNEL_PROCESS: Lazy<SharedProcess> = Lazy::new(|| Process::new_kernel_process());
 
 const KERNEL_PROCESS_NAME: &str = "kernel";
 
@@ -44,21 +45,6 @@ pub struct Process {
     pub father: Option<WeakSharedProcess>,
 }
 
-fn create_wake_up_function(id: ProcessId) {
-    let process = get_process(id).unwrap();
-    unsafe {
-        process.force_write_unlock();
-    }
-    for thread in process.read().threads.iter() {
-        unsafe {
-            thread.force_write_unlock();
-        }
-        thread.write().state = ThreadState::Ready;
-        log::info!("waking up thread {}",thread.read().id.0);
-    }
-    log::info!("Woke up {:?}",id);
-}
-
 impl Process {
     /// Creates a new process.
     /// Don't use this function directly, use `new_user_process` instead.
@@ -71,7 +57,7 @@ impl Process {
             page_table,
             threads: Default::default(),
             heap: ProcessHeap::new(heap_type),
-            signal_manager: SignalManager::new(64, create_wake_up_function, pid),
+            signal_manager: SignalManager::new(64),
             father: None,
         };
 
@@ -95,10 +81,20 @@ impl Process {
         let process = Arc::new(RwLock::new(Self::new(name, HeapType::User)));
         process.read().heap.init(Arc::downgrade(&process));
         ProcessBinary::map_segments(&binary, &mut process.write().page_table);
-        log::info!("User Entry Point: {:x} ID: {:?}", binary.entry(),process.read().id);
+        //log::info!("User Entry Point: {:x} ID: {:?}", binary.entry(),process.read().id);
         Thread::new_user_thread(Arc::downgrade(&process), binary.entry() as usize);
-        add_process(process.clone());
+        PROCESSES.write().push_back(process.clone());
         process
+    }
+
+    pub fn exit_process(&self) {
+        let mut processes = PROCESSES.write();
+        if let Some(index) = processes
+            .iter()
+            .position(|process| process.read().id == self.id)
+        {
+            processes.remove(index);
+        }
     }
 }
 

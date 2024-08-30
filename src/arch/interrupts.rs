@@ -1,5 +1,5 @@
-use alloc::format;
 use spin::Lazy;
+use spin::Mutex;
 use x86_64::instructions::port::PortReadOnly;
 use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::InterruptDescriptorTable;
@@ -9,7 +9,7 @@ use x86_64::VirtAddr;
 
 use super::gdt::DOUBLE_FAULT_IST_INDEX;
 use crate::arch::apic::get_lapic_id;
-use crate::task::scheduler::SCHEDULERS;
+use crate::task::scheduler::SCHEDULER;
 
 const INTERRUPT_INDEX_OFFSET: u8 = 32;
 
@@ -23,6 +23,30 @@ pub enum InterruptIndex {
     Mouse,
 }
 
+macro_rules! interrupt_handler {
+    ($k: expr) => {{
+        extern "x86-interrupt" fn default(frame: InterruptStackFrame) {
+            IRQ_HANDLER.lock()($k as usize, frame);
+        }
+        default
+    }};
+}
+
+macro_rules! interrupt_handler10 {
+    ($k: expr, $idt: expr) => {
+        $idt[$k * 10 + 0 + INTERRUPT_INDEX_OFFSET].set_handler_fn(interrupt_handler!($k * 10 + 0));
+        $idt[$k * 10 + 1 + INTERRUPT_INDEX_OFFSET].set_handler_fn(interrupt_handler!($k * 10 + 0));
+        $idt[$k * 10 + 2 + INTERRUPT_INDEX_OFFSET].set_handler_fn(interrupt_handler!($k * 10 + 0));
+        $idt[$k * 10 + 3 + INTERRUPT_INDEX_OFFSET].set_handler_fn(interrupt_handler!($k * 10 + 0));
+        $idt[$k * 10 + 4 + INTERRUPT_INDEX_OFFSET].set_handler_fn(interrupt_handler!($k * 10 + 0));
+        $idt[$k * 10 + 5 + INTERRUPT_INDEX_OFFSET].set_handler_fn(interrupt_handler!($k * 10 + 0));
+        $idt[$k * 10 + 6 + INTERRUPT_INDEX_OFFSET].set_handler_fn(interrupt_handler!($k * 10 + 0));
+        $idt[$k * 10 + 7 + INTERRUPT_INDEX_OFFSET].set_handler_fn(interrupt_handler!($k * 10 + 0));
+        $idt[$k * 10 + 8 + INTERRUPT_INDEX_OFFSET].set_handler_fn(interrupt_handler!($k * 10 + 0));
+        $idt[$k * 10 + 9 + INTERRUPT_INDEX_OFFSET].set_handler_fn(interrupt_handler!($k * 10 + 0));
+    };
+}
+
 pub static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
     let mut idt = InterruptDescriptorTable::new();
 
@@ -32,6 +56,29 @@ pub static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
     idt.page_fault.set_handler_fn(page_fault);
     idt.general_protection_fault
         .set_handler_fn(general_protection_fault);
+
+    interrupt_handler10!(0,idt);
+    interrupt_handler10!(1,idt);
+    interrupt_handler10!(2,idt);
+    interrupt_handler10!(3,idt);
+    interrupt_handler10!(4,idt);
+    interrupt_handler10!(5,idt);
+    interrupt_handler10!(6,idt);
+    interrupt_handler10!(7,idt);
+    interrupt_handler10!(8,idt);
+    interrupt_handler10!(9,idt);
+    interrupt_handler10!(10,idt);
+    interrupt_handler10!(11,idt);
+    interrupt_handler10!(12,idt);
+    interrupt_handler10!(13,idt);
+    interrupt_handler10!(14,idt);
+    interrupt_handler10!(15,idt);
+    interrupt_handler10!(16,idt);
+    interrupt_handler10!(17,idt);
+    interrupt_handler10!(18,idt);
+    interrupt_handler10!(19,idt);
+    interrupt_handler10!(20,idt);
+    interrupt_handler10!(21,idt);
 
     idt[InterruptIndex::Timer as u8].set_handler_fn(timer_interrupt);
     idt[InterruptIndex::ApicError as u8].set_handler_fn(lapic_error);
@@ -52,16 +99,10 @@ pub static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
 extern "x86-interrupt" fn timer_interrupt(_frame: InterruptStackFrame) {
     fn timer_handler(context: VirtAddr) -> VirtAddr {
         super::apic::end_of_interrupt();
-        let mut schedulers = SCHEDULERS.lock();
-        let current_cpu_id = get_lapic_id();
-        let scheduler = schedulers
-            .get_mut(&current_cpu_id)
-            .expect(&format!("Failed to find Processor {}!", current_cpu_id));
+        let mut scheduler = SCHEDULER.lock();
 
         let address = scheduler.schedule(context);
 
-        //crate::serial_print!(".");
-        //crate::serial_print!(".");
         address
     }
 
@@ -149,7 +190,7 @@ extern "x86-interrupt" fn mouse_interrupt(_frame: InterruptStackFrame) {
 extern "x86-interrupt" fn page_fault(frame: InterruptStackFrame, error_code: PageFaultErrorCode) {
     log::warn!("Processor: {}", get_lapic_id());
     log::warn!("Exception: Page Fault\n{:#?}", frame);
-    log::warn!("Error Code: {:#x}", error_code);
+    log::warn!("Error Code: {:?}", error_code);
     match Cr2::read() {
         Ok(address) => {
             log::warn!("Fault Address: {:#x}", address);
@@ -159,4 +200,16 @@ extern "x86-interrupt" fn page_fault(frame: InterruptStackFrame, error_code: Pag
         }
     }
     x86_64::instructions::hlt();
+}
+
+pub type IrqHandler = fn(irq: usize, frame: InterruptStackFrame);
+
+pub static IRQ_HANDLER: Mutex<IrqHandler> = Mutex::new(default_irq_handler);
+
+pub fn default_irq_handler(_irq: usize, _frame: InterruptStackFrame) {
+    log::warn!("Unhandled IRQ!");
+}
+
+pub fn register_irq_handler(handler: IrqHandler) {
+    *IRQ_HANDLER.lock() = handler;
 }
